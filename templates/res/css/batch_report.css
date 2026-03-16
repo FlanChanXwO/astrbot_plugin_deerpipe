@@ -1,0 +1,172 @@
+:root {
+    --primary-color: #8d6e63;   /* 鹿皮棕 */
+    --text-dark: #4e342e;       /* 深褐文字 */
+    --accent-color: #ff7043;    /* 活力橙 */
+    --bg-color: #fdfbf7;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    background-color: transparent; /* 截图用透明 */
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+}
+
+/* === 主容器卡片 (Card Style) === */
+.batch-container {
+    width: 100%;
+    max-width: 480px; /* 稍微加宽一点 */
+    background-color: #ffffff;
+    overflow: hidden; /* 确保圆角不被子元素溢出遮挡 */
+}
+
+/* === 头部 (Gradient Header) === */
+.header {
+    background: linear-gradient(180deg, #fffcf9 0%, #ffffff 100%);
+    padding: 25px 30px;
+    border-bottom: 1px solid #f0f0f0;
+    text-align: center;
+}
+
+.title {
+    font-size: 24px;
+    font-weight: 800;
+    color: var(--text-dark);
+    letter-spacing: -0.5px;
+    margin-bottom: 4px;
+}
+
+.subtitle {
+    font-size: 12px;
+    color: #a1887f;
+    letter-spacing: 2px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+/* === 列表区域 === */
+.list-container {
+    padding: 10px 25px;
+    background-color: #fff;
+    min-height: 100px; /* 防止列表为空时太丑 */
+}
+
+.list-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 0;
+    border-bottom: 1px dashed #eee;
+}
+
+/* 最后一个元素去掉分割线 */
+.list-row:last-child {
+    border-bottom: none;
+}
+
+/* 左侧 */
+.nickname {
+    font-size: 16px;
+    color: #333;
+    font-weight: 700;
+    max-width: 150px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 右侧信息 */
+.right-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* 次数显示 */
+.count-info {
+    font-size: 13px;
+    color: #888;
+}
+.count-info b {
+    color: var(--text-dark);
+    font-family: 'Nunito', sans-serif;
+    font-size: 16px;
+    font-weight: 800;
+}
+
+/* === +1 徽章 (与日历完全一致) === */
+.plus-badge {
+    background: linear-gradient(135deg, #ff7043 0%, #ff5722 100%);
+    color: white;
+    font-size: 11px;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 12px;
+    box-shadow: 0 2px 5px rgba(255, 87, 34, 0.3);
+    line-height: 1.2;
+}
+
+/* === 状态标签 === */
+.status {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-weight: 700;
+}
+
+.status.success {
+    background-color: #e8f5e9;
+    color: #2e7d32;
+    border: 1px solid #c8e6c9;
+}
+
+.status.old {
+    background-color: #f5f5f5;
+    color: #757575;
+    border: 1px solid #e0e0e0;
+}
+
+/* === 底部总结 (Footer) === */
+.summary {
+    background-color: #fafafa;
+    padding: 20px 30px;
+    border-top: 1px solid #eeeeee;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.summary-label {
+    font-size: 13px;
+    color: #999;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.summary-data {
+    display: flex;
+    gap: 15px;
+}
+
+.data-item {
+    font-size: 13px;
+    color: #666;
+    display: flex;
+    align-items: baseline;
+}
+
+.data-item b {
+    font-size: 20px;
+    margin: 0 4px;
+    font-family: 'Nunito', sans-serif;
+    position: relative;
+    top: 1px;
+}
+
+/* 强调成功人数 */
+.data-item.highlight b {
+    color: #d84315;
+}

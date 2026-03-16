@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=680, initial-scale=1.0" />
+  <style>{{ css_style | safe }}</style>
+  <title>鹿管日历</title>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="avatar-box">
+      {% if avatar_base64 %}
+      <img class="avatar" src="{{ avatar_base64 }}" alt="头像"/>
+      {% endif %}
+    </div>
+    <div class="header-info">
+      <div class="title">{{ year }}年{{ month }}月</div>
+      <div class="subtitle">DEER PIPE CALENDAR</div>
+    </div>
+    <div class="header-deco-img">
+      <img src="{{ assets.character }}" alt="人物"/>
+    </div>
+  </div>
+
+  <div class="week-header">
+    <span>周一</span><span>周二</span><span>周三</span><span>周四</span><span>周五</span><span>周六</span><span>周日</span>
+  </div>
+
+  <div class="calendar-grid">
+    {% for week in calendar %}
+    <div class="week-row">
+      {% for day in week %}
+      <div class="day-box {% if day.day_of_month == 0 %}empty{% elif day.count > 0 %}active{% endif %}">
+        {% if day.day_of_month > 0 %}
+        <div class="bg-wrapper">
+          <img class="bg-pipe" src="{{ assets.deer_pipe }}" />
+        </div>
+
+        {% if day.count > 0 %}
+        <img class="check-mark" src="{{ assets.check }}" />
+        {% endif %}
+
+        <div class="day-num">{{ day.day_of_month }}</div>
+
+        {% if day.count > 1 %}
+        <div class="count-badge">
+          <span>{{ '99+' if day.count > 99 else '+' ~ (day.count - 1) }}</span>
+        </div>
+        {% endif %}
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+</body>
+</html>
