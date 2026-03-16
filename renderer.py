@@ -33,7 +33,9 @@ class CalendarRenderer:
         self.template_path = base_dir / "templates" / "calendar.html"
         self.css_path = base_dir / "templates" / "res" / "css" / "calendar.css"
         self.images_dir = base_dir / "templates" / "res" / "images"
-        self.font_path = base_dir / "templates" / "res" / "font" / "ADLaMDisplay-Regular.ttf"
+        self.font_path = (
+            base_dir / "templates" / "res" / "font" / "ADLaMDisplay-Regular.ttf"
+        )
 
     def _get_image_data_uri(self, image_name: str) -> str:
         """获取图片的 base64 data URI.
