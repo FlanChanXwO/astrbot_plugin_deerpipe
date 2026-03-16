@@ -1,0 +1,190 @@
+html, body {
+    margin: 0;
+    padding: 0;
+}
+
+/* Local fonts: url() will be replaced with data URI at runtime when font files exist */
+@font-face {
+    font-family: 'ADLaM Display';
+    src: url('../font/ADLaMDisplay-Regular.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
+.container {
+    width: 680px;
+    background: #ffffff;
+    overflow: hidden;
+    position: relative;
+}
+
+/* === 头部设计 === */
+.header {
+    height: 110px;
+    background: linear-gradient(180deg, #fffcf9 0%, #ffffff 100%);
+    display: flex;
+    align-items: center;
+    padding: 0 30px;
+    border-bottom: 1px solid #f0f0f0;
+    position: relative;
+    overflow: hidden; /* 防止装饰图超出 */
+}
+
+/* ... (avatar样式保持不变) ... */
+.avatar-box { position: relative; z-index: 2; }
+.avatar {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid #fff;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+.header-info { margin-left: 20px; flex: 1; z-index: 2; }
+.title {
+    font-size: 28px;
+    font-weight: 800;
+    color: #4e342e;
+    letter-spacing: -0.5px;
+}
+.subtitle {
+    font-size: 13px;
+    color: #a1887f;
+    letter-spacing: 2px;
+    font-weight: 700;
+    margin-top: 6px;
+    text-transform: uppercase;
+}
+
+/* 新增：头部装饰图片样式 */
+.header-deco-img {
+    position: absolute;
+    right: 10px;
+    top: -10px;
+    width: 120px; /* 大一点才好看 */
+    height: 120px;
+    opacity: 0.8;
+    z-index: 1;
+    pointer-events: none; /* 防止遮挡 */
+}
+
+.header-deco-img img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+/* ... (week-header, calendar-grid, day-box, bg-pipe 样式保持不变) ... */
+.week-header {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    background: #fafafa;
+    padding: 12px 20px 8px 20px;
+    border-bottom: 1px dashed #eeeeee;
+}
+.week-header span {
+    text-align: center;
+    font-size: 12px;
+    font-weight: 800;
+    color: #b0bec5;
+    font-family: 'Arial', sans-serif;
+}
+.calendar-grid {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.week-row {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 12px;
+    width: 100%;
+}
+.day-box {
+    aspect-ratio: 1 / 1;
+    position: relative;
+    border-radius: 12px;
+    background: #f9f9f9;
+    overflow: hidden;
+    border: 1px solid #f0f0f0;
+}
+.day-box.empty { background: transparent; border: none; visibility: collapse; }
+.day-box.active {
+    background: #ffffff;
+    border-color: #fff3e0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+}
+.bg-wrapper {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.bg-pipe {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    image-rendering: -webkit-optimize-contrast;
+    transform: translateZ(0);
+}
+.check-mark {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 75%;
+    height: auto;
+    transform: translate(-50%, -50%);
+    z-index: 5;
+    filter: drop-shadow(0 2px 0px rgba(255, 255, 255, 0.8));
+}
+
+/* === 修改后的日期数字样式 (右上角 + 无背景框) === */
+.day-num {
+    position: absolute;
+    top: 6px;
+    right: 8px; /* 稍微留点边距 */
+
+    font-size: 15px;
+    font-weight: 800;
+    /* 主色调：深棕色 */
+    color: #5d4037;
+
+    /* 关键：使用白色描边代替背景框，类似字幕效果 */
+    text-shadow:
+            1px 1px 0 #fff,
+            -1px 1px 0 #fff,
+            1px -1px 0 #fff,
+            -1px -1px 0 #fff;
+
+    z-index: 6;
+    font-family: 'Nunito', sans-serif;
+    line-height: 1;
+}
+
+/* 激活的日期（有图）数字稍微调深一点颜色 */
+.day-box.active .day-num {
+    color: #3e2723;
+}
+
+/* count-badge */
+.count-badge {
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
+    background: linear-gradient(135deg, #ff7043 0%, #ff5722 100%);
+    color: white;
+    font-size: 11px;
+    font-weight: 800;
+    padding: 2px 7px;
+    border-radius: 10px;
+    z-index: 7;
+    box-shadow: 0 2px 5px rgba(255, 87, 34, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}

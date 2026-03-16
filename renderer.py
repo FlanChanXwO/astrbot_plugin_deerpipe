@@ -1,0 +1,326 @@
+"""Deer-pipe plugin calendar renderer.
+
+日历图片渲染模块，负责构建 HTML 模板数据并调用渲染服务。
+"""
+
+from __future__ import annotations
+
+import base64
+import calendar
+from pathlib import Path
+
+from astrbot.api import logger
+
+from .models import CalendarAssets, CalendarDay, CalendarPayload
+
+
+class CalendarRenderer:
+    """日历渲染器.
+
+    负责构建日历 HTML 模板数据并调用 AstrBot 的 html_render 服务。
+    """
+
+    # 字体文件大小限制: 1MB (避免 HTTP 422 payload too large)
+    MAX_FONT_SIZE = 1 * 1024 * 1024
+
+    def __init__(self, base_dir: Path) -> None:
+        """初始化日历渲染器.
+
+        Args:
+            base_dir: 插件根目录
+        """
+        self.base_dir = base_dir
+        self.template_path = base_dir / "templates" / "calendar.html"
+        self.css_path = base_dir / "templates" / "res" / "css" / "calendar.css"
+        self.images_dir = base_dir / "templates" / "res" / "images"
+        self.font_path = (
+            base_dir / "templates" / "res" / "font" / "ADLaMDisplay-Regular.ttf"
+        )
+
+    def _get_image_data_uri(self, image_name: str) -> str:
+        """获取图片的 base64 data URI.
+
+        Args:
+            image_name: 图片文件名
+
+        Returns:
+            base64 data URI 或空字符串
+        """
+        from .utils import image_to_data_uri
+
+        image_path = self.images_dir / image_name
+        return image_to_data_uri(image_path)
+
+    def _build_calendar_data(
+        self, month_map: dict[int, int], year: int, month: int
+    ) -> list[list[CalendarDay]]:
+        """构建日历数据结构.
+
+        Args:
+            month_map: 日期到打卡次数的映射
+            year: 年份
+            month: 月份
+
+        Returns:
+            按周分组的日历数据
+        """
+        cal = calendar.Calendar(firstweekday=0)
+        weeks: list[list[CalendarDay]] = []
+
+        for week in cal.monthdayscalendar(year, month):
+            # 跳过完全为空的周（比如月初之前的周）
+            if all(day == 0 for day in week):
+                continue
+            week_data: list[CalendarDay] = []
+            for day in week:
+                week_data.append(
+                    {
+                        "day_of_month": day,
+                        "count": month_map.get(day, 0) if day else 0,
+                    }
+                )
+            weeks.append(week_data)
+
+        return weeks
+
+    def _get_font_for_embedding(self) -> Path | None:
+        """获取适合嵌入的字体文件路径.
+
+        Returns:
+            字体文件路径，或 None 如果没有可用字体
+        """
+        if self.font_path.exists():
+            size = self.font_path.stat().st_size
+            if size < self.MAX_FONT_SIZE:
+                return self.font_path
+            logger.warning(
+                f"字体过大 ({size / 1024 / 1024:.2f}MB > "
+                f"{self.MAX_FONT_SIZE / 1024 / 1024:.2f}MB)，跳过嵌入"
+            )
+        return None
+
+    def _get_font_data_uri(self, font_path: Path | None = None) -> str:
+        """获取字体文件的 base64 data URI.
+
+        Args:
+            font_path: 字体文件路径，如果为 None 则自动选择
+
+        Returns:
+            base64 data URI 或空字符串
+        """
+        if font_path is None:
+            font_path = self._get_font_for_embedding()
+
+        if not font_path or not font_path.exists():
+            return ""
+
+        try:
+            data = font_path.read_bytes()
+            b64 = base64.b64encode(data).decode("ascii")
+            ext = font_path.suffix.lower()
+            mime = "font/ttf" if ext == ".ttf" else "font/otf"
+            return f"data:{mime};base64,{b64}"
+        except Exception as e:
+            logger.error(f"读取字体文件失败: {e}")
+            return ""
+
+    def _inline_fonts_in_css(self, css: str) -> str:
+        """将 CSS 中的字体相对路径替换为 base64 data URI.
+
+        Args:
+            css: 原始 CSS 内容
+
+        Returns:
+            处理后的 CSS 内容
+        """
+        if not self.font_path.exists():
+            return css
+
+        # 检查字体大小限制
+        if self.font_path.stat().st_size >= self.MAX_FONT_SIZE:
+            logger.warning(f"字体过大，跳过嵌入: {self.font_path.name}")
+            return css
+
+        try:
+            data_uri = self._get_font_data_uri(self.font_path)
+            if data_uri:
+                # 替换相对路径为 data URI
+                # CSS 中使用的是相对路径如: url('../font/ADLaMDisplay-Regular.ttf')
+                rel_path = f"url('../font/{self.font_path.name}')"
+                css = css.replace(rel_path, f"url('{data_uri}')")
+        except Exception as e:
+            logger.warning(f"内嵌字体失败: {e}")
+
+        return css
+
+    def _load_assets(self) -> CalendarAssets:
+        """加载日历所需的图片资源.
+
+        Returns:
+            图片资源字典
+        """
+        return {
+            "character": self._get_image_data_uri("character_1.png"),
+            "deer_pipe": self._get_image_data_uri("deerpipe.png"),
+            "check": self._get_image_data_uri("check.png"),
+        }
+
+    async def build_payload(
+        self, user_id: str, year: int, month: int, month_map: dict[int, int]
+    ) -> CalendarPayload:
+        """构建日历渲染所需的完整数据负载.
+
+        该方法会读取 CSS 文件内容并包装在 <style> 标签中，
+        同时获取用户头像和所需图片资源，最终组装成渲染所需的数据结构。
+
+        Args:
+            user_id: 用户 ID (用于获取头像)
+            year: 年份
+            month: 月份
+            month_map: 日期到打卡次数的映射
+
+        Returns:
+            日历渲染数据负载
+        """
+        from .models import CalendarPayload
+        from .utils import fetch_avatar_base64
+
+        # 读取 CSS 并处理字体嵌入
+        css_content = ""
+        if self.css_path.exists():
+            raw_css = self.css_path.read_text(encoding="utf-8")
+            # 将 CSS 中的字体相对路径替换为 base64 data URI
+            processed_css = self._inline_fonts_in_css(raw_css)
+            css_content = f"<style>{processed_css}</style>"
+
+        # 构建日历数据
+        calendar_weeks = self._build_calendar_data(month_map, year, month)
+
+        # 获取用户头像
+        avatar_b64 = await fetch_avatar_base64(user_id)
+
+        # 加载图片资源
+        assets = self._load_assets()
+
+        return CalendarPayload(
+            css_style=css_content,
+            year=year,
+            month=month,
+            calendar=calendar_weeks,
+            avatar_base64=avatar_b64,
+            assets=assets,
+        )
+
+    async def render(
+        self,
+        html_render_func,
+        user_id: str,
+        year: int,
+        month: int,
+        month_map: dict[int, int],
+    ) -> str:
+        """渲染日历图片.
+
+        Args:
+            html_render_func: AstrBot 的 html_render 方法
+            user_id: 用户 ID
+            year: 年份
+            month: 月份
+            month_map: 日期到打卡次数的映射
+
+        Returns:
+            渲染后的图片 URL
+
+        Raises:
+            FileNotFoundError: 模板文件不存在
+            Exception: 渲染失败
+        """
+        if not self.template_path.exists():
+            raise FileNotFoundError(f"日历模板不存在: {self.template_path}")
+
+        # 读取 HTML 模板
+        html = self.template_path.read_text(encoding="utf-8")
+
+        # 构建数据负载
+        payload = await self.build_payload(user_id, year, month, month_map)
+
+        # 转换为字典 (html_render 需要字典格式)
+        payload_dict = {
+            "css_style": payload.css_style,
+            "year": payload.year,
+            "month": payload.month,
+            "calendar": payload.calendar,
+            "avatar_base64": payload.avatar_base64,
+            "assets": payload.assets,
+        }
+
+        # 调用渲染服务
+        image_url = await html_render_func(
+            html,
+            payload_dict,
+            return_url=True,
+            options={
+                "type": "png",
+                "full_page": True,  # 改为 True 确保完整截图
+                "scale": "device",
+            },
+        )
+
+        return image_url
+
+    def format_fallback_text(
+        self, year: int, month: int, month_map: dict[int, int]
+    ) -> str:
+        """生成渲染失败时的纯文本日历.
+
+        Args:
+            year: 年份
+            month: 月份
+            month_map: 日期到打卡次数的映射
+
+        Returns:
+            格式化的纯文本日历 (包含日历表格和统计信息)
+        """
+        total = sum(month_map.values())
+        days_recorded = len(month_map)
+
+        # 构建日历表头
+        header = f"📅 {year}年{month}月 鹿历"
+        separator = "=" * 28
+
+        # 星期标题
+        weekday_header = " 日   一   二   三   四   五   六 "
+
+        # 构建日历主体
+        cal = calendar.Calendar(firstweekday=calendar.SUNDAY)
+        lines: list[str] = []
+
+        for week in cal.monthdayscalendar(year, month):
+            week_strs: list[str] = []
+            for day in week:
+                if day == 0:
+                    week_strs.append("    ")  # 空位
+                elif day in month_map:
+                    count = month_map[day]
+                    # 有记录的日期显示次数
+                    if count >= 10:
+                        week_strs.append(f"{count:>3} ")
+                    else:
+                        week_strs.append(f" {count}  ")
+                else:
+                    week_strs.append(f"{day:>3} ")
+            lines.append("".join(week_strs))
+
+        calendar_body = "\n".join(lines)
+
+        # 统计信息
+        stats = f"📊 统计: 共{days_recorded}天 {total}次\n💡 带数字的日期为已打卡次数"
+
+        return (
+            f"{header}\n"
+            f"{separator}\n"
+            f"{weekday_header}\n"
+            f"{calendar_body}\n"
+            f"{separator}\n"
+            f"{stats}"
+        )

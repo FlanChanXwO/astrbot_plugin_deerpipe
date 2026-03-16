@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1360, initial-scale=1.0"/>
+    <style>{{ css_style | safe }}</style>
+    <title>🦌管批量结算报告</title>
+</head>
+<body>
+<div class="batch-container" id="capture-target">
+    <div class="header">
+        <div class="header-content">
+            <div class="title">🦌管批量结算报告</div>
+            <div class="subtitle">BATCH SETTLEMENT REPORT</div>
+        </div>
+    </div>
+
+    <div class="list-container">
+        {% for item in results %}
+            <div class="list-row">
+                <div class="left-section">
+                    <span class="nickname">{{ item.nickname }}</span>
+                </div>
+
+                <div class="right-info">
+                    <span class="count-info">第 <b>{{ item.count }}</b> 次</span>
+                    <div class="plus-badge">+1</div>
+                    {% if item.is_new %}
+                        <span class="status success">今日首鹿</span>
+                    {% else %}
+                        <span class="status old">老手</span>
+                    {% endif %}
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+
+    <div class="summary">
+        <div class="summary-label">本次结算统计</div>
+        <div class="summary-data">
+            <span class="data-item">共帮 <b>{{ total_count }}</b> 人</span>
+            <span class="data-item highlight">成功 <b>{{ success_count }}</b> 人</span>
+        </div>
+    </div>
+</div>
+</body>
+</html>

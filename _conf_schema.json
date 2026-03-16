@@ -1,0 +1,35 @@
+{
+  "ai_behavior": {
+    "description": "AI 行为配置",
+    "type": "object",
+    "hint": "配置 AI 的功能权限",
+    "items": {
+      "allow_ai_help_deer": {
+        "type": "bool",
+        "description": "允许 AI 帮用户 🦌",
+        "hint": "开启后，AI 可以通过 deer_other 工具帮助用户打卡。关闭则 AI 不会响应帮🦌请求。",
+        "default": true
+      },
+      "allow_ai_be_deered": {
+        "type": "bool",
+        "description": "允许 AI 被 🦌",
+        "hint": "开启后，用户可以通过 deer_other 工具帮 AI 打卡。关闭则 AI 不会接受被🦌。",
+        "default": false
+      }
+    }
+  },
+  "limits": {
+    "description": "限制配置",
+    "type": "object",
+    "hint": "各种次数限制设置",
+    "items": {
+      "daily_retro_limit": {
+        "type": "int",
+        "description": "每日补🦌次数限制",
+        "hint": "限制每个用户每天可以补打卡的次数。0 表示禁止补🦌，最大 31（一个月最多31天）。",
+        "default": 1,
+        "slider": {"min": 0, "max": 31, "step": 1}
+      }
+    }
+  }
+}
