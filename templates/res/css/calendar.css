@@ -1,12 +1,15 @@
-@font-face {
-    font-family: 'NotoSansSC-Regular';
-    src: local('Noto Sans SC Regular'), local('思源黑体 CN Regular');
+html, body {
+    margin: 0;
+    padding: 0;
 }
 
-
-:root {
-    --primary-color: #8d6e63;
-    --bg-color: #fdfbf7;
+/* Local fonts: url() will be replaced with data URI at runtime when font files exist */
+@font-face {
+    font-family: 'ADLaM Display';
+    src: url('../font/ADLaMDisplay-Regular.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
 }
 
 .container {

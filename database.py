@@ -9,12 +9,10 @@ import datetime
 import datetime as dt
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import aiosqlite
 
-if TYPE_CHECKING:
-    from .models import MonthStats, UserConfig
+from .models import MonthStats, UserConfig
 
 
 def _get_plugin_version() -> str:

@@ -6,15 +6,12 @@
 from __future__ import annotations
 
 import base64
-import re
 from pathlib import Path
 
 import aiohttp
 
 from astrbot.api import logger
-
-# 正则表达式：从 CQ 码中提取 @ 提及的用户 ID
-AT_PATTERN = re.compile(r"\[CQ:at,qq=(\d+)]")
+from astrbot.core.message.components import At
 
 # HTTP 请求超时时间 (秒)
 HTTP_TIMEOUT_SECONDS = 15
@@ -69,18 +66,16 @@ async def fetch_avatar_base64(user_id: str, timeout: int = HTTP_TIMEOUT_SECONDS)
         return ""
 
 
-def extract_mention_user_ids(message: str) -> list[str]:
-    """从消息中提取 @ 提及的用户 ID 列表.
-
-    解析 CQ 码格式的 @ 消息，提取其中的 QQ 号码。
+def extract_mention_user_ids(messages: list[At]) -> set[str]:
+    """从消息中提取 @ 提及的用户 ID 集合.
 
     Args:
-        message: 原始消息字符串
+        messages: At 组件列表
 
     Returns:
-        被 @ 的用户 ID 列表
+        被 @ 的用户 ID 集合（自动去重）
     """
-    return AT_PATTERN.findall(message)
+    return {str(m.qq) for m in messages}
 
 
 def parse_allow_flag(text: str) -> bool | None:

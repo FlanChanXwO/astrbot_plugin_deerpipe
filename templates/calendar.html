@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=680, initial-scale=1.0" />
+  <meta name="viewport" content="width=680, initial-scale=2.0" />
   <style>{{ css_style | safe }}</style>
   <title>鹿管日历</title>
 </head>
@@ -55,5 +55,17 @@
     {% endfor %}
   </div>
 </div>
+<script>
+window.addEventListener('load', function() {
+    var c = document.body.firstElementChild;
+    if (c) {
+        var h = c.offsetHeight + 'px';
+        document.documentElement.style.height = h;
+        document.body.style.height = h;
+        document.documentElement.style.overflow = 'hidden';
+        document.body.style.overflow = 'hidden';
+    }
+});
+</script>
 </body>
 </html>

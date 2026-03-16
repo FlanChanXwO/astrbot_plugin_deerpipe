@@ -40,7 +40,7 @@ from astrbot.api import llm_tool, logger
 from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.star import Context, Star, StarTools
 from astrbot.core import AstrBotConfig
-from astrbot.core.message.components import File
+from astrbot.core.message.components import File, At
 from astrbot.core.platform.message_type import MessageType
 
 from .commands import DeerPipeService
@@ -287,29 +287,80 @@ class DeerPipePlugin(Star):
 
     @filter.command("deer_calendar", alias={"鹿历", "🦌历", "撸历", "撸🦌历"})
     async def deer_calendar_cmd(self, event: AstrMessageEvent):
-        """显示本月日历 (/deer_calendar)."""
-        async for result, is_text in self.service.render_calendar(
-            event, dt.date.today(), self.html_render
-        ):
-            if is_text:
-                yield event.plain_result(result)
-            else:
-                yield event.image_result(result)
+        """显示本月日历 (/deer_calendar).
+
+        支持查看自己的日历或 @ 他人的日历。
+        """
+        from .utils import extract_mention_user_ids
+
+        messages = event.message_obj.message
+        at_list = [m for m in messages if isinstance(m, At)]
+        at_ids = extract_mention_user_ids(at_list)
+
+        # 构建 user_id -> name 映射
+        at_map = {str(m.qq): m.name for m in at_list if m.name}
+
+        if at_ids:
+            # 查看他人的鹿历
+            target_id = list(at_ids)[0]  # 只取第一个 @ 的人
+            target_name = at_map.get(target_id, target_id)
+            async for result, is_text in self.service.render_calendar(
+                event, dt.date.today(), self.html_render, user_id=target_id
+            ):
+                if is_text:
+                    yield event.plain_result(f"{target_name} 的鹿历：\n{result}")
+                else:
+                    yield event.make_result().message(f"{target_name} 的鹿历").url_image(result)
+        else:
+            # 查看自己的鹿历
+            async for result, is_text in self.service.render_calendar(
+                event, dt.date.today(), self.html_render
+            ):
+                if is_text:
+                    yield event.plain_result(result)
+                else:
+                    yield event.image_result(result)
 
     @filter.command(
         "last_month_calendar", alias={"上月鹿历", "上月🦌历", "上月撸历", "上月撸🦌历"}
     )
     async def last_month_calendar_cmd(self, event: AstrMessageEvent):
-        """显示上月日历 (/last_month_calendar)."""
+        """显示上月日历 (/last_month_calendar).
+
+        支持查看自己的上月日历或 @ 他人的上月日历。
+        """
+        from .utils import extract_mention_user_ids
+
+        messages = event.message_obj.message
+        at_list = [m for m in messages if isinstance(m, At)]
+        at_ids = extract_mention_user_ids(at_list)
+
+        # 构建 user_id -> name 映射
+        at_map = {str(m.qq): m.name for m in at_list if m.name}
+
         first = dt.date.today().replace(day=1)
         last_month = (first - dt.timedelta(days=1)).replace(day=1)
-        async for result, is_text in self.service.render_calendar(
-            event, last_month, self.html_render
-        ):
-            if is_text:
-                yield event.plain_result(result)
-            else:
-                yield event.image_result(result)
+
+        if at_ids:
+            # 查看他人的上月鹿历
+            target_id = list(at_ids)[0]
+            target_name = at_map.get(target_id, target_id)
+            async for result, is_text in self.service.render_calendar(
+                event, last_month, self.html_render, user_id=target_id
+            ):
+                if is_text:
+                    yield event.plain_result(f"{target_name} 的上月鹿历：\n{result}")
+                else:
+                    yield event.make_result().message(f"📅 {target_name} 的上月鹿历").url_image(result)
+        else:
+            # 查看自己的上月鹿历
+            async for result, is_text in self.service.render_calendar(
+                event, last_month, self.html_render
+            ):
+                if is_text:
+                    yield event.plain_result(result)
+                else:
+                    yield event.make_result().message("📅 上月鹿历").url_image(result)
 
     # ==================================================================
     # Data export/import commands (管理员命令，不是LLM工具)
@@ -461,22 +512,21 @@ class DeerPipePlugin(Star):
     # Plain message handlers (without / prefix)
     # ==================================================================
 
-    @filter.regex(r"^(🦌|鹿|撸|撸🦌|帮(🦌|鹿|撸|撸🦌))")
+    @filter.regex(r"^(🦌|鹿|撸|撸🦌)(?!历)")
     async def plain_deer_merged_cmd(self, event: AstrMessageEvent):
         """处理纯🦌/帮🦌消息（不带/前缀）.
 
-        用户直接发送 🦌、鹿、撸、撸🦌 触发自我打卡。
-        用户发送 "帮🦌 @用户" 或 "🦌 @用户" 触发帮他人打卡。
+        直接发送 🦌、鹿、撸、撸🦌 触发自我打卡。
+        发送 "🦌 @用户" 触发帮他人打卡。
         单人输出日历图片，多人使用 batch_report 模板输出批量报告。
         """
         from .utils import extract_mention_user_ids
-
-        message_str = event.message_str.strip()
-        is_help_cmd = message_str.startswith("帮")
-        at_ids = extract_mention_user_ids(message_str)
+        messages = event.message_obj.message
+        at_list = [m for m in messages if isinstance(m, At)]
+        at_ids = extract_mention_user_ids(at_list)
 
         # 判断是帮他人打卡还是自己打卡
-        if is_help_cmd or at_ids:
+        if at_ids:
             # 帮他人打卡模式
             if event.get_message_type() != MessageType.GROUP_MESSAGE:
                 yield event.plain_result("该命令仅限群聊使用。")
@@ -499,19 +549,23 @@ class DeerPipePlugin(Star):
             try:
                 results = []
                 success_count = 0
+                # 构建 user_id -> At 组件的映射，用于获取昵称
+                at_map = {str(m.qq): m for m in at_list}
                 for target_id in at_ids:
+                    # 获取用户名称（优先使用 At 组件中的 name）
+                    at_component = at_map.get(target_id)
+                    target_name = at_component.name if at_component and at_component.name else target_id
                     allowed = await self.db.is_help_allowed(db, target_id)
                     if not allowed:
                         results.append({
                             "user_id": target_id,
-                            "nickname": target_id,
+                            "nickname": target_name,
                             "success": False,
                             "count": 0,
                             "is_new": False,
                             "reason": "不允许被帮🦌"
                         })
                         continue
-
                     # 记录打卡前检查是否已有记录（用于判断 is_new）
                     has_record_before = await self.db.has_record_today(db, target_id)
 
@@ -527,7 +581,7 @@ class DeerPipePlugin(Star):
 
                     results.append({
                         "user_id": target_id,
-                        "nickname": target_id,
+                        "nickname": target_name,
                         "success": True,
                         "count": today_count,
                         "is_new": not has_record_before
@@ -543,17 +597,20 @@ class DeerPipePlugin(Star):
                 await db.close()
 
             # 根据人数决定输出格式
-            if len(at_ids) == 1:
-                # 单人：输出日历图片
-                target_id = at_ids[0]
+            at_ids_list = list(at_ids)
+            if len(at_ids_list) == 1:
+                # 单人：输出被帮者的日历图片
+                target_id = at_ids_list[0]
+                # 从 results 获取已解析的昵称
+                target_name = results[0]["nickname"] if results else target_id
                 async for cal_result, is_text in self.service.render_calendar(
-                    event, today, self.html_render
+                    event, today, self.html_render, user_id=target_id
                 ):
                     if is_text:
-                        yield event.plain_result(f"成功帮 {target_id}🦌了")
+                        yield event.plain_result(f"成功帮{target_name}🦌了")
                         yield event.plain_result(cal_result)
                     else:
-                        yield event.make_result().message(f"成功帮 {target_id}🦌了").url_image(cal_result)
+                        yield event.make_result().message(f"成功帮{target_name}🦌了").url_image(cal_result)
             else:
                 # 多人：使用 batch_report 模板
                 image_url = await self._render_batch_report(results, success_count)
@@ -581,6 +638,75 @@ class DeerPipePlugin(Star):
                     yield event.plain_result(cal_result)
                 else:
                     yield event.make_result().message(result).url_image(cal_result)
+
+    @filter.regex(r"^🦌历$")
+    async def plain_deer_calendar_cmd(self, event: AstrMessageEvent):
+        """处理纯 🦌历 消息（不带/前缀）."""
+        from .utils import extract_mention_user_ids
+
+        messages = event.message_obj.message
+        at_list = [m for m in messages if isinstance(m, At)]
+        at_ids = extract_mention_user_ids(at_list)
+
+        # 构建 user_id -> name 映射
+        at_map = {str(m.qq): m.name for m in at_list if m.name}
+
+        if at_ids:
+            # 查看他人的鹿历
+            target_id = list(at_ids)[0]
+            target_name = at_map.get(target_id, target_id)
+            async for result, is_text in self.service.render_calendar(
+                event, dt.date.today(), self.html_render, user_id=target_id
+            ):
+                if is_text:
+                    yield event.plain_result(f"{target_name} 的鹿历：\n{result}")
+                else:
+                    yield event.make_result().message(f"{target_name} 的鹿历").url_image(result)
+        else:
+            # 查看自己的鹿历
+            async for result, is_text in self.service.render_calendar(
+                event, dt.date.today(), self.html_render
+            ):
+                if is_text:
+                    yield event.plain_result(result)
+                else:
+                    yield event.image_result(result)
+
+    @filter.regex(r"^上月🦌历$")
+    async def plain_last_month_calendar_cmd(self, event: AstrMessageEvent):
+        """处理纯 上月🦌历 消息（不带/前缀）."""
+        from .utils import extract_mention_user_ids
+
+        messages = event.message_obj.message
+        at_list = [m for m in messages if isinstance(m, At)]
+        at_ids = extract_mention_user_ids(at_list)
+
+        # 构建 user_id -> name 映射
+        at_map = {str(m.qq): m.name for m in at_list if m.name}
+
+        first = dt.date.today().replace(day=1)
+        last_month = (first - dt.timedelta(days=1)).replace(day=1)
+
+        if at_ids:
+            # 查看他人的上月鹿历
+            target_id = list(at_ids)[0]
+            target_name = at_map.get(target_id, target_id)
+            async for result, is_text in self.service.render_calendar(
+                event, last_month, self.html_render, user_id=target_id
+            ):
+                if is_text:
+                    yield event.plain_result(f"{target_name} 的上月鹿历：\n{result}")
+                else:
+                    yield event.make_result().message(f"{target_name} 的上月鹿历").url_image(result)
+        else:
+            # 查看自己的上月鹿历
+            async for result, is_text in self.service.render_calendar(
+                event, last_month, self.html_render
+            ):
+                if is_text:
+                    yield event.plain_result(result)
+                else:
+                    yield event.make_result().message("上月鹿历").url_image(result)
 
     async def _render_batch_report(self, results: list[dict], success_count: int) -> str | None:
         """渲染批量报告图片.
@@ -616,12 +742,34 @@ class DeerPipePlugin(Star):
                 "success_count": success_count,
             }
 
+            # 构建渲染数据
+            payload = {
+                "css_style": css_content,
+                "results": results,
+                "total_count": len(results),
+                "success_count": success_count,
+            }
+
+            # 高度也直接按 2 倍物理像素计算
+            # 头部(~200) + 列表容器上下内边距(40) + 每行(~112) + 底部(~160)
+            estimated_height = 200 + 40 + len(payload["results"]) * 112 + 160
+
             # 调用渲染服务
             image_url = await self.html_render(
                 html,
                 payload,
                 return_url=True,
-                options={"type": "png", "full_page": True, "scale": "device"},
+                options={
+                    "type": "png",
+                    "full_page": False,
+                    "scale": "device",  # 保持原本的参数，不用改
+                    "clip": {
+                        "x": 0,
+                        "y": 0,
+                        "width": 1360,  # 宽度直接锁定为 1360
+                        "height": estimated_height,
+                    },
+                },
             )
             return image_url
 

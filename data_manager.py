@@ -5,12 +5,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from astrbot.api import logger
 
-if TYPE_CHECKING:
-    from .database import DatabaseManager
+from .database import DatabaseManager
 
 
 class DataManager:

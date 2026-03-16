@@ -7,14 +7,13 @@ AI工具函数模块，为LLM提供结构化的数据访问能力。
 from __future__ import annotations
 
 import datetime as dt
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-if TYPE_CHECKING:
-    from astrbot.core import AstrBotConfig
+from astrbot.core import AstrBotConfig
 
-    from .commands import DeerPipeService
-    from .data_manager import DataManager
-    from .database import DatabaseManager
+from .commands import DeerPipeService
+from .data_manager import DataManager
+from .database import DatabaseManager
 
 
 class DeerPipeLLMTools:

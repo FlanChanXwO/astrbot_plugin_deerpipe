@@ -5,12 +5,13 @@
 
 from __future__ import annotations
 
+import base64
 import calendar
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from .models import CalendarAssets, CalendarDay, CalendarPayload
+from astrbot.api import logger
+
+from .models import CalendarAssets, CalendarDay, CalendarPayload
 
 
 class CalendarRenderer:
@@ -18,6 +19,9 @@ class CalendarRenderer:
 
     负责构建日历 HTML 模板数据并调用 AstrBot 的 html_render 服务。
     """
+
+    # 字体文件大小限制: 1MB (避免 HTTP 422 payload too large)
+    MAX_FONT_SIZE = 1 * 1024 * 1024
 
     def __init__(self, base_dir: Path) -> None:
         """初始化日历渲染器.
@@ -29,6 +33,7 @@ class CalendarRenderer:
         self.template_path = base_dir / "templates" / "calendar.html"
         self.css_path = base_dir / "templates" / "res" / "css" / "calendar.css"
         self.images_dir = base_dir / "templates" / "res" / "images"
+        self.font_path = base_dir / "templates" / "res" / "font" / "ADLaMDisplay-Regular.ttf"
 
     def _get_image_data_uri(self, image_name: str) -> str:
         """获取图片的 base64 data URI.
@@ -76,6 +81,76 @@ class CalendarRenderer:
 
         return weeks
 
+    def _get_font_for_embedding(self) -> Path | None:
+        """获取适合嵌入的字体文件路径.
+
+        Returns:
+            字体文件路径，或 None 如果没有可用字体
+        """
+        if self.font_path.exists():
+            size = self.font_path.stat().st_size
+            if size < self.MAX_FONT_SIZE:
+                return self.font_path
+            logger.warning(
+                f"字体过大 ({size / 1024 / 1024:.2f}MB > "
+                f"{self.MAX_FONT_SIZE / 1024 / 1024:.2f}MB)，跳过嵌入"
+            )
+        return None
+
+    def _get_font_data_uri(self, font_path: Path | None = None) -> str:
+        """获取字体文件的 base64 data URI.
+
+        Args:
+            font_path: 字体文件路径，如果为 None 则自动选择
+
+        Returns:
+            base64 data URI 或空字符串
+        """
+        if font_path is None:
+            font_path = self._get_font_for_embedding()
+
+        if not font_path or not font_path.exists():
+            return ""
+
+        try:
+            data = font_path.read_bytes()
+            b64 = base64.b64encode(data).decode("ascii")
+            ext = font_path.suffix.lower()
+            mime = "font/ttf" if ext == ".ttf" else "font/otf"
+            return f"data:{mime};base64,{b64}"
+        except Exception as e:
+            logger.error(f"读取字体文件失败: {e}")
+            return ""
+
+    def _inline_fonts_in_css(self, css: str) -> str:
+        """将 CSS 中的字体相对路径替换为 base64 data URI.
+
+        Args:
+            css: 原始 CSS 内容
+
+        Returns:
+            处理后的 CSS 内容
+        """
+        if not self.font_path.exists():
+            return css
+
+        # 检查字体大小限制
+        if self.font_path.stat().st_size >= self.MAX_FONT_SIZE:
+            logger.warning(f"字体过大，跳过嵌入: {self.font_path.name}")
+            return css
+
+        try:
+            data_uri = self._get_font_data_uri(self.font_path)
+            if data_uri:
+                # 替换相对路径为 data URI
+                # CSS 中使用的是相对路径如: url('../font/ADLaMDisplay-Regular.ttf')
+                rel_path = f"url('../font/{self.font_path.name}')"
+                css = css.replace(rel_path, f"url('{data_uri}')")
+        except Exception as e:
+            logger.warning(f"内嵌字体失败: {e}")
+
+        return css
+
     def _load_assets(self) -> CalendarAssets:
         """加载日历所需的图片资源.
 
@@ -108,10 +183,13 @@ class CalendarRenderer:
         from .models import CalendarPayload
         from .utils import fetch_avatar_base64
 
-        # 读取 CSS 并包装为 style 标签
+        # 读取 CSS 并处理字体嵌入
         css_content = ""
         if self.css_path.exists():
-            css_content = f"<style>{self.css_path.read_text(encoding='utf-8')}</style>"
+            raw_css = self.css_path.read_text(encoding="utf-8")
+            # 将 CSS 中的字体相对路径替换为 base64 data URI
+            processed_css = self._inline_fonts_in_css(raw_css)
+            css_content = f"<style>{processed_css}</style>"
 
         # 构建日历数据
         calendar_weeks = self._build_calendar_data(month_map, year, month)
@@ -179,7 +257,11 @@ class CalendarRenderer:
             html,
             payload_dict,
             return_url=True,
-            options={"type": "png", "full_page": True, "scale": "device"},
+            options={
+                "type": "png",
+                "full_page": True,  # 改为 True 确保完整截图
+                "scale": "device",
+            },
         )
 
         return image_url

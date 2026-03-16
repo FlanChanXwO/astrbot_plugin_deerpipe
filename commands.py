@@ -7,17 +7,14 @@ from __future__ import annotations
 
 import datetime as dt
 import re
-from typing import TYPE_CHECKING
 
 from astrbot.api import logger
+from astrbot.api.event import AstrMessageEvent
 from astrbot.core.platform.message_type import MessageType
 
 from .database import DatabaseManager
 from .renderer import CalendarRenderer
 from .utils import extract_mention_user_ids, validate_day
-
-if TYPE_CHECKING:
-    from astrbot.api.event import AstrMessageEvent
 
 
 class DeerPipeService:
@@ -42,6 +39,26 @@ class DeerPipeService:
         self.db = db
         self.renderer = renderer
         self.config = config or {}
+
+    def _get_template(self, key: str) -> str:
+        """获取文本模板.
+
+        Args:
+            key: 模板键名
+
+        Returns:
+            模板字符串
+        """
+        templates = {
+            "group_only": "该命令仅限群聊使用。",
+            "operation_failed": "操作失败，请稍后重试。",
+            "deer_past_limit": "今日补🦌次数已达上限。",
+            "deer_past_success": "成功补🦌 {month}月{day}日",
+            "calendar_load_failed": "日历数据加载失败。",
+            "fallback_calendar_header": "📅 {year}年{month}月 鹿历",
+            "fallback_calendar_stats": "📊 统计: 共{days}天 {total}次",
+        }
+        return templates.get(key, "")
 
     async def handle_deer_self(self, event: AstrMessageEvent) -> str:
         """处理自我打卡.
@@ -103,7 +120,7 @@ class DeerPipeService:
                 await self.db.record_attendance(
                     db, target_id, today.year, today.month, today.day
                 )
-                results.append(f"成功帮 {target_id}🦌了")
+                results.append(f"成功帮{target_id}🦌了")
             await db.commit()
         except Exception as exc:
             logger.error(f"deer_other failed: {exc}")
@@ -222,7 +239,7 @@ class DeerPipeService:
         )
 
     async def render_calendar(
-        self, event: AstrMessageEvent, month_date: dt.date, html_render_func
+        self, event: AstrMessageEvent, month_date: dt.date, html_render_func, user_id: str | None = None
     ):
         """渲染日历.
 
@@ -230,11 +247,13 @@ class DeerPipeService:
             event: 消息事件
             month_date: 目标月份
             html_render_func: HTML 渲染函数
+            user_id: 可选，指定用户ID（默认为发送者）
 
         Yields:
             渲染结果 (图片 URL 或纯文本, 是否为文本)
         """
-        user_id = event.get_sender_id()
+        if user_id is None:
+            user_id = event.get_sender_id()
 
         # 从数据库获取日历数据
         db = await self.db.get_connection()

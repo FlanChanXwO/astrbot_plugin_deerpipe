@@ -1,78 +1,66 @@
-:root {
-    --primary-color: #8d6e63;   /* 鹿皮棕 */
-    --text-dark: #4e342e;       /* 深褐文字 */
-    --accent-color: #ff7043;    /* 活力橙 */
-    --bg-color: #fdfbf7;
+html, body {
+    margin: 0;
+    padding: 0;
+    background-color: transparent !important;
 }
 
-* { margin: 0; padding: 0; box-sizing: border-box; }
-
-body {
-    background-color: transparent; /* 截图用透明 */
-    padding: 20px;
-    display: flex;
-    justify-content: center;
-    align-items: flex-start;
-}
-
-/* === 主容器卡片 (Card Style) === */
+/* === 主容器卡片 (2倍尺寸 1360px) === */
 .batch-container {
-    width: 100%;
-    max-width: 480px; /* 稍微加宽一点 */
-    background-color: #ffffff;
-    overflow: hidden; /* 确保圆角不被子元素溢出遮挡 */
+    width: 1360px;
+    background: #ffffff;
+    overflow: hidden;
+    position: relative;
+    display: inline-block;
 }
 
-/* === 头部 (Gradient Header) === */
+/* === 头部 === */
 .header {
     background: linear-gradient(180deg, #fffcf9 0%, #ffffff 100%);
-    padding: 25px 30px;
-    border-bottom: 1px solid #f0f0f0;
+    padding: 50px 60px;
+    border-bottom: 2px solid #f0f0f0;
     text-align: center;
 }
 
 .title {
-    font-size: 24px;
+    font-size: 48px;
     font-weight: 800;
-    color: var(--text-dark);
-    letter-spacing: -0.5px;
-    margin-bottom: 4px;
+    color: var(--text-dark, #333);
+    letter-spacing: -1px;
+    margin-bottom: 8px;
 }
 
 .subtitle {
-    font-size: 12px;
+    font-size: 24px;
     color: #a1887f;
-    letter-spacing: 2px;
+    letter-spacing: 4px;
     font-weight: 700;
     text-transform: uppercase;
 }
 
 /* === 列表区域 === */
 .list-container {
-    padding: 10px 25px;
+    padding: 20px 50px;
     background-color: #fff;
-    min-height: 100px; /* 防止列表为空时太丑 */
 }
 
 .list-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 16px 0;
-    border-bottom: 1px dashed #eee;
+    padding: 32px 0;
+    border-bottom: 2px dashed #eee;
 }
 
-/* 最后一个元素去掉分割线 */
 .list-row:last-child {
     border-bottom: none;
 }
 
 /* 左侧 */
 .nickname {
-    font-size: 16px;
+    font-size: 32px;
     color: #333;
     font-weight: 700;
-    max-width: 150px;
+    max-width: 300px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -82,91 +70,86 @@ body {
 .right-info {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 20px;
 }
 
 /* 次数显示 */
 .count-info {
-    font-size: 13px;
+    font-size: 26px;
     color: #888;
 }
 .count-info b {
-    color: var(--text-dark);
+    color: var(--text-dark, #333);
     font-family: 'Nunito', sans-serif;
-    font-size: 16px;
+    font-size: 32px;
     font-weight: 800;
 }
 
-/* === +1 徽章 (与日历完全一致) === */
+/* === +1 徽章 === */
 .plus-badge {
     background: linear-gradient(135deg, #ff7043 0%, #ff5722 100%);
     color: white;
-    font-size: 11px;
+    font-size: 22px;
     font-weight: 800;
-    padding: 2px 8px;
-    border-radius: 12px;
-    box-shadow: 0 2px 5px rgba(255, 87, 34, 0.3);
+    padding: 4px 16px;
+    border-radius: 24px;
+    box-shadow: 0 4px 10px rgba(255, 87, 34, 0.3);
     line-height: 1.2;
 }
 
 /* === 状态标签 === */
 .status {
-    font-size: 11px;
-    padding: 3px 8px;
-    border-radius: 6px;
+    font-size: 22px;
+    padding: 6px 16px;
+    border-radius: 12px;
     font-weight: 700;
 }
 
 .status.success {
     background-color: #e8f5e9;
     color: #2e7d32;
-    border: 1px solid #c8e6c9;
+    border: 2px solid #c8e6c9;
 }
 
 .status.old {
     background-color: #f5f5f5;
     color: #757575;
-    border: 1px solid #e0e0e0;
+    border: 2px solid #e0e0e0;
 }
 
-/* === 底部总结 (Footer) === */
+/* === 底部总结 === */
 .summary {
     background-color: #fafafa;
-    padding: 20px 30px;
-    border-top: 1px solid #eeeeee;
+    padding: 40px 60px;
+    border-top: 2px solid #eeeeee;
     display: flex;
     justify-content: space-between;
     align-items: center;
 }
 
 .summary-label {
-    font-size: 13px;
+    font-size: 26px;
     color: #999;
     font-weight: 600;
-    letter-spacing: 0.5px;
+    letter-spacing: 1px;
 }
 
 .summary-data {
     display: flex;
-    gap: 15px;
+    gap: 30px;
 }
 
 .data-item {
-    font-size: 13px;
+    font-size: 26px;
     color: #666;
     display: flex;
     align-items: baseline;
 }
 
 .data-item b {
-    font-size: 20px;
-    margin: 0 4px;
+    font-size: 40px;
+    margin: 0 8px;
     font-family: 'Nunito', sans-serif;
     position: relative;
-    top: 1px;
-}
-
-/* 强调成功人数 */
-.data-item.highlight b {
-    color: #d84315;
+    top: 2px;
 }
