@@ -69,7 +69,10 @@ class DataManager:
                 if "user_id" not in config:
                     return False, f"数据格式无效：user_configs[{i}] 缺少 user_id 字段。"
                 if not isinstance(config.get("user_id"), str):
-                    return False, f"数据格式无效：user_configs[{i}].user_id 必须是字符串。"
+                    return (
+                        False,
+                        f"数据格式无效：user_configs[{i}].user_id 必须是字符串。",
+                    )
 
         # 验证 deer_records 结构
         if "deer_records" in data:
@@ -81,11 +84,17 @@ class DataManager:
                 required_fields = ["user_id", "year", "month", "day", "count"]
                 for field in required_fields:
                     if field not in record:
-                        return False, f"数据格式无效：deer_records[{i}] 缺少 {field} 字段。"
+                        return (
+                            False,
+                            f"数据格式无效：deer_records[{i}] 缺少 {field} 字段。",
+                        )
                 # 验证数值类型
                 for field in ["year", "month", "day", "count"]:
                     if not isinstance(record.get(field), int):
-                        return False, f"数据格式无效：deer_records[{i}].{field} 必须是整数。"
+                        return (
+                            False,
+                            f"数据格式无效：deer_records[{i}].{field} 必须是整数。",
+                        )
 
         db = await self.db.get_connection()
         try:
