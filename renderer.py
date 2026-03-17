@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import base64
 import calendar
+import hashlib
 from pathlib import Path
+from typing import Literal
 
 from astrbot.api import logger
 
@@ -153,20 +155,72 @@ class CalendarRenderer:
 
         return css
 
-    def _load_assets(self) -> CalendarAssets:
+    def _get_character_image(self, total_count: int, user_id: str) -> str:
+        """根据打卡次数和用户ID确定性地选择角色图片.
+
+        参考Java实现的分组逻辑:
+        - count >= 50: character_9~11
+        - count >= 20: character_5~8
+        - 其他: character_1~4
+
+        使用user_id哈希确保同一用户同月渲染结果稳定。
+
+        Args:
+            total_count: 当月总打卡次数
+            user_id: 用户ID，用于确定性选择
+
+        Returns:
+            角色图片的 base64 data URI
+        """
+        # 根据打卡次数确定范围
+        if total_count >= 50:
+            # 高阶: character_9.png ~ character_11.png
+            start, end = 9, 11
+        elif total_count >= 20:
+            # 中阶: character_5.png ~ character_8.png
+            start, end = 5, 8
+        else:
+            # 初阶: character_1.png ~ character_4.png
+            start, end = 1, 4
+
+        # 使用user_id哈希确定性地选择索引 (使用 hashlib 保证跨进程一致性)
+        hash_input = f"{user_id}:{total_count}".encode("utf-8")
+        hash_hex = hashlib.md5(hash_input).hexdigest()
+        hash_value = int(hash_hex, 16)
+        index = start + (hash_value % (end - start + 1))
+
+        return self._get_image_data_uri(f"character_{index}.png")
+
+    def _load_assets(
+        self, user_id: str, month_map: dict[int, int] | None = None
+    ) -> CalendarAssets:
         """加载日历所需的图片资源.
+
+        Args:
+            user_id: 用户ID，用于确定性选择角色图片
+            month_map: 日期到打卡次数的映射，用于确定角色图片
 
         Returns:
             图片资源字典
         """
+        # 计算总打卡次数，用于选择角色图片
+        total_count = sum(month_map.values()) if month_map else 0
+
         return {
-            "character": self._get_image_data_uri("character_1.png"),
+            "character": self._get_character_image(total_count, user_id),
             "deer_pipe": self._get_image_data_uri("deerpipe.png"),
             "check": self._get_image_data_uri("check.png"),
+            "undeer_pipe": self._get_image_data_uri("undeerpipe.png"),
         }
 
     async def build_payload(
-        self, user_id: str, year: int, month: int, month_map: dict[int, int]
+        self,
+        user_id: str,
+        year: int,
+        month: int,
+        month_map: dict[int, int],
+        count_display_mode: Literal["additive", "count"] = "additive",
+        show_check_mark: bool = True,
     ) -> CalendarPayload:
         """构建日历渲染所需的完整数据负载.
 
@@ -178,6 +232,8 @@ class CalendarRenderer:
             year: 年份
             month: 月份
             month_map: 日期到打卡次数的映射
+            count_display_mode: 打卡次数显示模式
+            show_check_mark: 是否显示打勾图标
 
         Returns:
             日历渲染数据负载
@@ -193,14 +249,19 @@ class CalendarRenderer:
             processed_css = self._inline_fonts_in_css(raw_css)
             css_content = f"<style>{processed_css}</style>"
 
-        # 构建日历数据
+        # 验证并规范化 count_display_mode
+        if count_display_mode not in ("additive", "count"):
+            logger.warning(
+                f"Invalid count_display_mode: {count_display_mode}, using 'additive'"
+            )
+            count_display_mode = "additive"
         calendar_weeks = self._build_calendar_data(month_map, year, month)
 
         # 获取用户头像
         avatar_b64 = await fetch_avatar_base64(user_id)
 
-        # 加载图片资源
-        assets = self._load_assets()
+        # 加载图片资源（根据打卡次数选择角色图片）
+        assets = self._load_assets(user_id, month_map)
 
         return CalendarPayload(
             css_style=css_content,
@@ -209,6 +270,8 @@ class CalendarRenderer:
             calendar=calendar_weeks,
             avatar_base64=avatar_b64,
             assets=assets,
+            count_display_mode=count_display_mode,
+            show_check_mark=show_check_mark,
         )
 
     async def render(
@@ -218,6 +281,8 @@ class CalendarRenderer:
         year: int,
         month: int,
         month_map: dict[int, int],
+        count_display_mode: Literal["additive", "count"] = "additive",
+        show_check_mark: bool = True,
     ) -> str:
         """渲染日历图片.
 
@@ -227,6 +292,8 @@ class CalendarRenderer:
             year: 年份
             month: 月份
             month_map: 日期到打卡次数的映射
+            count_display_mode: 打卡次数显示模式
+            show_check_mark: 是否显示打勾图标
 
         Returns:
             渲染后的图片 URL
@@ -242,7 +309,9 @@ class CalendarRenderer:
         html = self.template_path.read_text(encoding="utf-8")
 
         # 构建数据负载
-        payload = await self.build_payload(user_id, year, month, month_map)
+        payload = await self.build_payload(
+            user_id, year, month, month_map, count_display_mode, show_check_mark
+        )
 
         # 转换为字典 (html_render 需要字典格式)
         payload_dict = {
@@ -252,6 +321,8 @@ class CalendarRenderer:
             "calendar": payload.calendar,
             "avatar_base64": payload.avatar_base64,
             "assets": payload.assets,
+            "count_display_mode": payload.count_display_mode,
+            "show_check_mark": payload.show_check_mark,
         }
 
         # 调用渲染服务
@@ -261,7 +332,7 @@ class CalendarRenderer:
             return_url=True,
             options={
                 "type": "png",
-                "full_page": True,  # 改为 True 确保完整截图
+                "full_page": True,
                 "scale": "device",
             },
         )

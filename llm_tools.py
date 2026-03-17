@@ -9,8 +9,6 @@ from __future__ import annotations
 import datetime as dt
 from typing import Any
 
-from astrbot.core import AstrBotConfig
-
 from .commands import DeerPipeService
 from .data_manager import DataManager
 from .database import DatabaseManager
@@ -27,7 +25,7 @@ class DeerPipeLLMTools:
         db: DatabaseManager,
         data_manager: DataManager,
         service: DeerPipeService,
-        config: AstrBotConfig | None = None,
+        config: dict | None = None,
     ) -> None:
         """初始化AI工具.
 

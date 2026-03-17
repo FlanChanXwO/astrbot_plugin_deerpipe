@@ -10,6 +10,7 @@ import re
 
 from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent
+from astrbot.core.message.components import At
 from astrbot.core.platform.message_type import MessageType
 
 from .database import DatabaseManager
@@ -99,7 +100,10 @@ class DeerPipeService:
         if event.get_message_type() != MessageType.GROUP_MESSAGE:
             return "该命令仅限群聊使用。"
 
-        at_ids = extract_mention_user_ids(event.message_str)
+        # 从消息中提取 @ 列表
+        messages = event.message_obj.message
+        at_list = [m for m in messages if isinstance(m, At)]
+        at_ids = extract_mention_user_ids(at_list)
         if not at_ids:
             return None
 
@@ -274,12 +278,19 @@ class DeerPipeService:
 
         # 尝试渲染图片
         try:
+            # 从配置获取显示模式
+            calendar_config = self.config.get("calendar", {})
+            count_display_mode = calendar_config.get("count_display_mode", "additive")
+            show_check_mark = calendar_config.get("show_check_mark", True)
+
             image_url = await self.renderer.render(
                 html_render_func,
                 user_id,
                 month_date.year,
                 month_date.month,
                 month_map,
+                count_display_mode,
+                show_check_mark,
             )
             yield image_url, False
         except Exception as exc:
@@ -312,10 +323,10 @@ class DeerPipeService:
         header = self._get_template("fallback_calendar_header").format(
             year=year, month=month
         )
-        separator = "=" * 28
+        separator = "=" * 29
 
-        # 星期标题
-        weekday_header = " 日   一   二   三   四   五   六 "
+        # 星期标题 - 使用固定宽度
+        weekday_header = "  日   一   二   三   四   五   六"
 
         # 构建日历主体
         cal = calendar.Calendar(firstweekday=calendar.SUNDAY)
@@ -325,15 +336,18 @@ class DeerPipeService:
             week_strs: list[str] = []
             for day in week:
                 if day == 0:
-                    week_strs.append("    ")  # 空位
+                    week_strs.append("    ")  # 空位 4空格
                 elif day in month_map:
                     count = month_map[day]
-                    # 有记录的日期显示次数
-                    if count >= 10:
-                        week_strs.append(f"{count:>3} ")
+                    # 有记录的日期显示 ✓+次数，居中在4字符宽度内
+                    if count == 1:
+                        week_strs.append(" ✓  ")  # 单次打卡
                     else:
-                        week_strs.append(f" {count}  ")
+                        # 多次打卡显示 ✓数字
+                        mark = f"✓{count}"
+                        week_strs.append(f"{mark:>4}")
                 else:
+                    # 未签到日期显示日期数字，右对齐
                     week_strs.append(f"{day:>3} ")
             lines.append("".join(week_strs))
 
@@ -351,5 +365,5 @@ class DeerPipeService:
             f"{calendar_body}\n"
             f"{separator}\n"
             f"{stats}\n"
-            f"💡 带数字的日期为已打卡次数"
+            f"💡 带 ✓ 的为已签到日期，✓数字表示当日打卡次数"
         )

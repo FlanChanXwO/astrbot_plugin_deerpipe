@@ -15,6 +15,12 @@
         "description": "允许 AI 被 🦌",
         "hint": "开启后，用户可以通过 deer_other 工具帮 AI 打卡。关闭则 AI 不会接受被🦌。",
         "default": false
+      },
+      "custom_prompt": {
+        "type": "string",
+        "description": "自定义 LLM Prompt",
+        "hint": "自定义 prompt 会影响 AI 对🦌打卡行为的认知和回复风格。为空则使用默认行为。",
+        "default": ""
       }
     }
   },
@@ -29,6 +35,29 @@
         "hint": "限制每个用户每天可以补打卡的次数。0 表示禁止补🦌，最大 31（一个月最多31天）。",
         "default": 1,
         "slider": {"min": 0, "max": 31, "step": 1}
+      }
+    }
+  },
+  "calendar": {
+    "description": "日历显示配置",
+    "type": "object",
+    "hint": "配置日历的视觉表现",
+    "items": {
+      "count_display_mode": {
+        "type": "string",
+        "description": "打卡次数显示模式",
+        "hint": "附加模式(additive)：打卡2次显示为打勾\"+1\" ; 计数模式(count)：打卡2次显示为打勾\"x2\"",
+        "default": "additive",
+        "options": [
+          "additive",
+          "count"
+        ]
+      },
+      "show_check_mark": {
+        "type": "bool",
+        "description": "显示打勾图标",
+        "hint": "开启后，签到区块会显示打勾图标；关闭则只显示打卡次数",
+        "default": true
       }
     }
   }

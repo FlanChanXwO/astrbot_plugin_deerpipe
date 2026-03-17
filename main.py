@@ -38,9 +38,10 @@ from pathlib import Path
 
 from astrbot.api import llm_tool, logger
 from astrbot.api.event import AstrMessageEvent, filter
+from astrbot.api.provider import ProviderRequest
 from astrbot.api.star import Context, Star, StarTools
 from astrbot.core import AstrBotConfig
-from astrbot.core.message.components import File, At
+from astrbot.core.message.components import At, File
 from astrbot.core.platform.message_type import MessageType
 
 from .commands import DeerPipeService
@@ -66,8 +67,8 @@ class DeerPipePlugin(Star):
         """Initialize the plugin."""
         super().__init__(context)
 
-        # 读取插件配置
-        self.config = config
+        # 读取插件配置 (转换为 dict)
+        self.config = self._config_to_dict(config)
 
         # 初始化数据库、渲染器和数据管理器
         db_path = StarTools.get_data_dir(self.name) / "deerpipe.db"
@@ -82,9 +83,50 @@ class DeerPipePlugin(Star):
             self.db, self.data_manager, self.service, self.config
         )
 
-    def __del__(self):
+    def _config_to_dict(self, config: AstrBotConfig) -> dict:
+        """将 AstrBotConfig 转换为普通 dict.
+
+        优先使用插件专用配置，如果没有则返回空 dict。
+        """
+        if hasattr(config, "get"):
+            # 尝试获取插件配置
+            plugin_config = config.get(self.name)
+            if plugin_config and isinstance(plugin_config, dict):
+                return plugin_config
+        # 如果 config 是 dict 类型，检查是否包含插件配置键
+        if isinstance(config, dict):
+            if self.name in config:
+                plugin_config = config.get(self.name)
+                if isinstance(plugin_config, dict):
+                    return plugin_config
+            # 不含插件配置键时返回空 dict，而不是整个 config
+            return {}
+        return {}
+
+    async def terminate(self):
         """插件卸载时清理资源."""
         self._unregister_llm_tools()
+
+    @filter.on_llm_request()
+    async def on_llm_request(self, _: AstrMessageEvent, req: ProviderRequest):
+        """在 LLM 请求时附加自定义 prompt.
+
+        如果配置了 custom_prompt，则将其追加到 system_prompt 中。
+        """
+        ai_config = self.config.get("ai_behavior", {})
+        custom_prompt = (
+            ai_config.get("custom_prompt", "") if isinstance(ai_config, dict) else ""
+        )
+        if custom_prompt:
+            logger.debug("[DeerPipe] 当前 custom_prompt 长度: %d", len(custom_prompt))
+            # 防护 system_prompt 为 None 的情况
+            current_prompt = req.system_prompt or ""
+            logger.debug("[DeerPipe] 当前 system_prompt 长度: %d", len(current_prompt))
+            req.system_prompt = f"{current_prompt}\n\n{custom_prompt}"
+            logger.debug(
+                "[DeerPipe] 已追加 custom_prompt，当前 system_prompt 长度: %d",
+                len(req.system_prompt),
+            )
 
     def _unregister_llm_tools(self):
         """注销所有LLM工具函数."""
@@ -101,20 +143,31 @@ class DeerPipePlugin(Star):
     # ==================================================================
     @llm_tool("deer_self")
     async def tool_deer_self(self, event: AstrMessageEvent) -> str:
-        """Check in for yourself today. Use this when the user wants to check in, mark their attendance, or says something like "deer", "打卡", "🦌" etc.
+        """Check in (deer) for yourself today. Use this when the user wants to check in, mark their attendance, or says something like "deer", "打卡", "🦌", "撸", "鹿", "导管", "导", "🦌管", "鹿管", "撸管", "我要🦌", "我要撸", "我要鹿", "我要导管", "我要导", "帮我🦌", "帮我撸", "帮我鹿", "帮我导管", "帮我导" etc.
 
         Returns:
             JSON result with success status, date, and stats.
         """
         user_id = event.get_sender_id()
         result = await self.llm_tools.deer_self(user_id)
+
+        # 如果打卡成功，发送🦌历图片
+        if result.get("success"):
+            async for cal_result, is_text in self.service.render_calendar(
+                event, dt.date.today(), self.html_render, user_id=user_id
+            ):
+                if is_text:
+                    await event.send(event.plain_result(cal_result))
+                else:
+                    await event.send(event.image_result(cal_result))
+
         return json.dumps(result, ensure_ascii=False)
 
     @llm_tool("deer_other")
     async def tool_deer_other(
         self, event: AstrMessageEvent, target_ids: list[str]
     ) -> str:
-        """Help other users check in on their behalf. Use this when the user says "帮我🦌", "帮XX🦌", or asks you to check in for them.
+        """Help other users check in (deer) on their behalf. Use this when the user says "帮我🦌", "帮XX🦌", "帮我撸", "帮XX撸", "帮我鹿", "帮XX鹿", "帮我导管", "帮XX导管", "帮我导", "帮XX导", "帮🦌", "帮撸", "帮鹿", "帮导管", "帮导", or asks you to check in for them.
 
         IMPORTANT: Requires 'allow_ai_help_deer' to be enabled in plugin config.
 
@@ -126,6 +179,18 @@ class DeerPipePlugin(Star):
         """
         user_id = event.get_sender_id()
         result = await self.llm_tools.deer_other(user_id, target_ids)
+
+        # 如果帮打卡成功，为第一个成功的用户发送🦌历图片
+        if result.get("success") and target_ids:
+            target_id = target_ids[0]
+            async for cal_result, is_text in self.service.render_calendar(
+                event, dt.date.today(), self.html_render, user_id=target_id
+            ):
+                if is_text:
+                    await event.send(event.plain_result(cal_result))
+                else:
+                    await event.send(event.image_result(cal_result))
+
         return json.dumps(result, ensure_ascii=False)
 
     @llm_tool("retro_deer")
@@ -136,7 +201,7 @@ class DeerPipePlugin(Star):
         year: int = 0,
         month: int = 0,
     ) -> str:
-        """Make a retroactive check-in for a specific past day. Use this when the user wants to补打卡 for a date they missed.
+        """Make a retroactive check-in (deer) for a specific past day. Use this when the user wants to 补打卡, 补🦌, 补撸, 补鹿, 补导管, 补导 for a date they missed.
 
         Args:
             day(number): Day of month (1-31) to retroactively check in
@@ -153,11 +218,22 @@ class DeerPipePlugin(Star):
             year if year > 0 else None,
             month if month > 0 else None,
         )
+
+        # 如果补打卡成功，发送🦌历图片
+        if result.get("success"):
+            async for cal_result, is_text in self.service.render_calendar(
+                event, dt.date.today(), self.html_render, user_id=user_id
+            ):
+                if is_text:
+                    await event.send(event.plain_result(cal_result))
+                else:
+                    await event.send(event.image_result(cal_result))
+
         return json.dumps(result, ensure_ascii=False)
 
     @llm_tool("set_allow_help")
     async def tool_set_allow_help(self, event: AstrMessageEvent, allowed: bool) -> str:
-        """Set whether others can help check in for you. Use this when the user wants to allow or disallow others from helping.
+        """Set whether others can help check in (deer) for you. Use this when the user wants to allow or disallow others from helping them 🦌, 撸, 鹿, 导管, 导.
 
         Args:
             allowed(boolean): True to allow others to help, false to disable
@@ -176,7 +252,7 @@ class DeerPipePlugin(Star):
         year: int = 0,
         month: int = 0,
     ) -> str:
-        """Get user's deer check-in data including calendar and statistics. Use this when the user asks "我🦌了多少次", "我的统计", "看看我的🦌历", or any question about their data.
+        """Get user's deer check-in data including calendar and statistics. Use this when the user asks "我🦌了多少次", "我撸了多少次", "我鹿了多少次", "我导了多少次", "我导管了多少次", "我的统计", "看看我的🦌历", "看看我的撸历", "看看我的鹿历", "看看我的导历", "看看我的导管历", "我的🦌数据", "我的撸数据", "我的鹿数据", "我的导数据", "我的导管数据", or any question about their 🦌, 撸, 鹿, 导管, 导 data.
 
         Args:
             year(number): Year, default 0 means current year
@@ -208,6 +284,20 @@ class DeerPipePlugin(Star):
             },
             "note": "For visual calendar image, use /🦌历 command",
         }
+
+        # 发送🦌历图片
+        if calendar_result.get("success"):
+            target_date = dt.date(
+                year_val or dt.date.today().year, month_val or dt.date.today().month, 1
+            )
+            async for cal_result, is_text in self.service.render_calendar(
+                event, target_date, self.html_render, user_id=user_id
+            ):
+                if is_text:
+                    await event.send(event.plain_result(cal_result))
+                else:
+                    await event.send(event.image_result(cal_result))
+
         return json.dumps(result, ensure_ascii=False)
 
     # ==================================================================
@@ -541,11 +631,6 @@ class DeerPipePlugin(Star):
                 yield event.plain_result("该命令仅限群聊使用。")
                 return
 
-            # 如果没有 @ 任何人，提示用户
-            if not at_ids:
-                yield event.plain_result("请 @ 要帮🦌的用户。")
-                return
-
             # 禁止帮 bot 自己打卡
             self_id = event.get_self_id()
             if self_id and self_id in at_ids:
@@ -766,14 +851,6 @@ class DeerPipePlugin(Star):
             css_content = ""
             if css_path.exists():
                 css_content = f"<style>{css_path.read_text(encoding='utf-8')}</style>"
-
-            # 构建渲染数据
-            payload = {
-                "css_style": css_content,
-                "results": results,
-                "total_count": len(results),
-                "success_count": success_count,
-            }
 
             # 构建渲染数据
             payload = {
