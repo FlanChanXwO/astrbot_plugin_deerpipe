@@ -109,12 +109,19 @@ class DeerPipePlugin(Star):
         如果配置了 custom_prompt，则将其追加到 system_prompt 中。
         """
         ai_config = self.config.get("ai_behavior", {})
-        custom_prompt = ai_config.get("custom_prompt", "") if isinstance(ai_config, dict) else ""
+        custom_prompt = (
+            ai_config.get("custom_prompt", "") if isinstance(ai_config, dict) else ""
+        )
         if custom_prompt:
             logger.debug("[DeerPipe] 当前 custom_prompt 长度: %d", len(custom_prompt))
-            logger.debug("[DeerPipe] 当前 system_prompt 长度: %d", len(req.system_prompt))
+            logger.debug(
+                "[DeerPipe] 当前 system_prompt 长度: %d", len(req.system_prompt)
+            )
             req.system_prompt += f"\n\n{custom_prompt}"
-            logger.debug("[DeerPipe] 已追加 custom_prompt，当前 system_prompt 长度: %d", len(req.system_prompt))
+            logger.debug(
+                "[DeerPipe] 已追加 custom_prompt，当前 system_prompt 长度: %d",
+                len(req.system_prompt),
+            )
 
     def _unregister_llm_tools(self):
         """注销所有LLM工具函数."""
@@ -275,7 +282,9 @@ class DeerPipePlugin(Star):
 
         # 发送🦌历图片
         if calendar_result.get("success"):
-            target_date = dt.date(year_val or dt.date.today().year, month_val or dt.date.today().month, 1)
+            target_date = dt.date(
+                year_val or dt.date.today().year, month_val or dt.date.today().month, 1
+            )
             async for cal_result, is_text in self.service.render_calendar(
                 event, target_date, self.html_render, user_id=user_id
             ):
