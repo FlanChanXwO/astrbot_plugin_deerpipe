@@ -93,9 +93,14 @@ class DeerPipePlugin(Star):
             plugin_config = config.get(self.name)
             if plugin_config and isinstance(plugin_config, dict):
                 return plugin_config
-        # 如果 config 本身就是 dict-like，尝试直接返回
+        # 如果 config 是 dict 类型，检查是否包含插件配置键
         if isinstance(config, dict):
-            return config
+            if self.name in config:
+                plugin_config = config.get(self.name)
+                if isinstance(plugin_config, dict):
+                    return plugin_config
+            # 不含插件配置键时返回空 dict，而不是整个 config
+            return {}
         return {}
 
     async def terminate(self):
@@ -114,10 +119,12 @@ class DeerPipePlugin(Star):
         )
         if custom_prompt:
             logger.debug("[DeerPipe] 当前 custom_prompt 长度: %d", len(custom_prompt))
+            # 防护 system_prompt 为 None 的情况
+            current_prompt = req.system_prompt or ""
             logger.debug(
-                "[DeerPipe] 当前 system_prompt 长度: %d", len(req.system_prompt)
+                "[DeerPipe] 当前 system_prompt 长度: %d", len(current_prompt)
             )
-            req.system_prompt += f"\n\n{custom_prompt}"
+            req.system_prompt = f"{current_prompt}\n\n{custom_prompt}"
             logger.debug(
                 "[DeerPipe] 已追加 custom_prompt，当前 system_prompt 长度: %d",
                 len(req.system_prompt),

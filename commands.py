@@ -10,6 +10,7 @@ import re
 
 from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent
+from astrbot.core.message.components import At
 from astrbot.core.platform.message_type import MessageType
 
 from .database import DatabaseManager
@@ -100,8 +101,6 @@ class DeerPipeService:
             return "该命令仅限群聊使用。"
 
         # 从消息中提取 @ 列表
-        from astrbot.core.message.components import At
-
         messages = event.message_obj.message
         at_list = [m for m in messages if isinstance(m, At)]
         at_ids = extract_mention_user_ids(at_list)
