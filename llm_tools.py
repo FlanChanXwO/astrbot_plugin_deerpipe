@@ -10,6 +10,8 @@ import calendar
 import datetime as dt
 from typing import Any
 
+from astrbot.api import logger
+
 from .commands import DeerPipeService
 from .data_manager import DataManager
 from .database import DatabaseManager
@@ -118,6 +120,7 @@ class DeerPipeLLMTools:
                 "calendar_data": month_map,
             }
         except Exception:
+            logger.exception(f"deer_self failed: user_id={user_id}")
             return {
                 "success": False,
                 "user_id": user_id,
@@ -211,6 +214,7 @@ class DeerPipeLLMTools:
                 "results": results,
             }
         except Exception:
+            logger.exception(f"deer_other failed: operator_id={operator_id}, target_ids={target_ids}")
             return {
                 "success": False,
                 "error": "INTERNAL_ERROR",
@@ -277,11 +281,12 @@ class DeerPipeLLMTools:
                     else 0,
                 },
             }
-        except Exception as e:
+        except Exception:
+            logger.exception(f"get_calendar failed: user_id={user_id}, year={year}, month={month}")
             return {
                 "success": False,
                 "user_id": user_id,
-                "error": str(e),
+                "error": "INTERNAL_ERROR",
                 "message": "加载🦌历失败。",
             }
         finally:
@@ -380,6 +385,7 @@ class DeerPipeLLMTools:
                 "daily_limit": daily_limit,
             }
         except Exception:
+            logger.exception(f"retro_deer failed: user_id={user_id}, year={year}, month={month}, day={day}")
             return {
                 "success": False,
                 "error": "INTERNAL_ERROR",
@@ -412,6 +418,7 @@ class DeerPipeLLMTools:
                 else "已关闭，现在只有你自己能🦌了！",
             }
         except Exception:
+            logger.exception(f"set_allow_help failed: user_id={user_id}, allowed={allowed}")
             return {
                 "success": False,
                 "error": "INTERNAL_ERROR",
@@ -466,10 +473,13 @@ class DeerPipeLLMTools:
                 },
                 "last_retro": last_retro,
             }
-        except Exception as e:
+        except Exception:
+            logger.exception(f"get_user_stats failed: user_id={user_id}")
             return {
                 "success": False,
-                "error": str(e),
+                "user_id": user_id,
+                "error": "INTERNAL_ERROR",
+                "message": "获取用户统计失败。",
             }
         finally:
             await db.close()

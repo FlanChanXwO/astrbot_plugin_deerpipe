@@ -9,6 +9,7 @@ import base64
 import calendar
 import hashlib
 import time
+from collections import OrderedDict
 from pathlib import Path
 from typing import Literal
 
@@ -17,10 +18,32 @@ from astrbot.api import logger
 from .models import CalendarAssets, CalendarDay, CalendarPayload
 from .utils import fetch_avatar_base64
 
-# 头像缓存: {user_id: (timestamp, data_uri)}
-_avatar_cache: dict[str, tuple[float, str]] = {}
+# 头像缓存: OrderedDict 实现 LRU 淘汰策略
+_avatar_cache: "OrderedDict[str, tuple[float, str]]" = OrderedDict()
 # 缓存有效期 (秒)
 AVATAR_CACHE_TTL = 3600  # 1小时
+# 缓存最大条目数，防止内存无限增长
+AVATAR_CACHE_MAX_SIZE = 1024
+
+
+def _cleanup_avatar_cache(now: float | None = None) -> None:
+    """清理过期的头像缓存，并在必要时进行容量控制。"""
+    if now is None:
+        now = time.time()
+
+    # 删除已过期的条目
+    expired_keys = [
+        user_id
+        for user_id, (timestamp, _data_uri) in _avatar_cache.items()
+        if now - timestamp > AVATAR_CACHE_TTL
+    ]
+    for user_id in expired_keys:
+        _avatar_cache.pop(user_id, None)
+
+    # 控制缓存大小，超出时从最旧的条目开始淘汰
+    while len(_avatar_cache) > AVATAR_CACHE_MAX_SIZE:
+        # OrderedDict.popitem(last=False) 弹出最早插入/最久未使用的条目
+        _avatar_cache.popitem(last=False)
 
 
 class CalendarRenderer:
@@ -34,7 +57,7 @@ class CalendarRenderer:
 
     @staticmethod
     async def _get_cached_avatar(user_id: str) -> str:
-        """获取用户头像，带 TTL 缓存.
+        """获取用户头像，带 TTL 缓存和 LRU 淘汰策略.
 
         Args:
             user_id: 用户 ID
@@ -45,15 +68,22 @@ class CalendarRenderer:
         now = time.time()
 
         # 检查缓存是否有效
-        if user_id in _avatar_cache:
-            timestamp, data = _avatar_cache[user_id]
+        cached = _avatar_cache.get(user_id)
+        if cached is not None:
+            timestamp, data = cached
             if now - timestamp < AVATAR_CACHE_TTL:
                 logger.debug(f"[DeerPipe] 头像缓存命中: {user_id}")
+                # 更新访问顺序（LRU：将最新使用的移到队尾）
+                _avatar_cache.move_to_end(user_id)
                 return data
+            # 缓存已过期，删除
+            _avatar_cache.pop(user_id, None)
 
         # 缓存未命中或已过期，重新获取
         data = await fetch_avatar_base64(user_id)
         if data:
+            # 清理过期条目并控制容量，然后添加新条目
+            _cleanup_avatar_cache(now)
             _avatar_cache[user_id] = (now, data)
             logger.debug(f"[DeerPipe] 头像缓存更新: {user_id}")
         return data

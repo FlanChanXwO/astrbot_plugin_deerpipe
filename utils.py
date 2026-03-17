@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import calendar
 import re
@@ -20,18 +21,36 @@ HTTP_TIMEOUT_SECONDS = 15
 
 # 全局共享的 aiohttp ClientSession
 _aiohttp_session: aiohttp.ClientSession | None = None
+_aiohttp_session_lock = asyncio.Lock()
 
 
-def _get_aiohttp_session() -> aiohttp.ClientSession:
+async def _get_aiohttp_session() -> aiohttp.ClientSession:
     """获取全局共享的 aiohttp ClientSession.
 
     Returns:
         全局共享的 ClientSession 实例
     """
     global _aiohttp_session
-    if _aiohttp_session is None or _aiohttp_session.closed:
-        _aiohttp_session = aiohttp.ClientSession()
-    return _aiohttp_session
+    # 双重检查锁，避免在高并发时重复创建 ClientSession
+    if _aiohttp_session is not None and not _aiohttp_session.closed:
+        return _aiohttp_session
+
+    async with _aiohttp_session_lock:
+        if _aiohttp_session is None or _aiohttp_session.closed:
+            _aiohttp_session = aiohttp.ClientSession()
+        return _aiohttp_session
+
+
+async def close_aiohttp_session() -> None:
+    """关闭全局共享的 aiohttp ClientSession.
+
+    在应用关闭时调用，避免资源泄漏和事件循环清理警告。
+    """
+    global _aiohttp_session
+    if _aiohttp_session is not None and not _aiohttp_session.closed:
+        await _aiohttp_session.close()
+        logger.debug("[DeerPipe] aiohttp ClientSession 已关闭")
+    _aiohttp_session = None
 
 
 def image_to_data_uri(image_path: Path) -> str:
@@ -73,7 +92,7 @@ async def fetch_avatar_base64(user_id: str, timeout: int = HTTP_TIMEOUT_SECONDS)
     client_timeout = aiohttp.ClientTimeout(total=timeout)
 
     try:
-        session = _get_aiohttp_session()
+        session = await _get_aiohttp_session()
         async with session.get(avatar_url, timeout=client_timeout) as resp:
             resp.raise_for_status()
             data = await resp.read()
@@ -108,12 +127,15 @@ def parse_allow_flag(text: str) -> bool | None:
     Returns:
         True 表示开启/允许，False 表示关闭/禁止，None 表示无法解析
     """
-    # 使用正则匹配完整词或边界，避免子串误判
+    # 将文本转换为小写并去除首尾空格
+    normalized = text.strip().lower()
+
     # 匹配 "开"、"on"、"允许" 作为独立词
-    if re.search(r'\b(开|on|允许)\b', text, re.IGNORECASE):
+    # 使用负向前瞻/后瞻确保是独立词，适配中英文混合场景
+    if re.search(r'(^|[\s,，.;:；：])(开|on|允许)(?=[\s,，.;:；：]|$)', normalized, re.IGNORECASE):
         return True
     # 匹配 "关"、"off"、"禁止" 作为独立词
-    if re.search(r'\b(关|off|禁止)\b', text, re.IGNORECASE):
+    if re.search(r'(^|[\s,，.;:；：])(关|off|禁止)(?=[\s,，.;:；：]|$)', normalized, re.IGNORECASE):
         return False
     return None
 

@@ -49,6 +49,7 @@ from .data_manager import DataManager
 from .database import DatabaseManager
 from .llm_tools import DeerPipeLLMTools
 from .renderer import CalendarRenderer
+from .utils import close_aiohttp_session
 
 
 class DeerPipePlugin(Star):
@@ -106,6 +107,8 @@ class DeerPipePlugin(Star):
     async def terminate(self):
         """插件卸载时清理资源."""
         self._unregister_llm_tools()
+        # 关闭全局 aiohttp ClientSession，避免资源泄漏
+        await close_aiohttp_session()
 
     @filter.on_llm_request()
     async def on_llm_request(self, _: AstrMessageEvent, req: ProviderRequest):
