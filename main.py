@@ -310,7 +310,11 @@ class DeerPipePlugin(Star):
                 if is_text:
                     yield event.plain_result(f"{target_name} 的鹿历：\n{result}")
                 else:
-                    yield event.make_result().message(f"{target_name} 的鹿历").url_image(result)
+                    yield (
+                        event.make_result()
+                        .message(f"{target_name} 的鹿历")
+                        .url_image(result)
+                    )
         else:
             # 查看自己的鹿历
             async for result, is_text in self.service.render_calendar(
@@ -351,7 +355,11 @@ class DeerPipePlugin(Star):
                 if is_text:
                     yield event.plain_result(f"{target_name} 的上月鹿历：\n{result}")
                 else:
-                    yield event.make_result().message(f"📅 {target_name} 的上月鹿历").url_image(result)
+                    yield (
+                        event.make_result()
+                        .message(f"📅 {target_name} 的上月鹿历")
+                        .url_image(result)
+                    )
         else:
             # 查看自己的上月鹿历
             async for result, is_text in self.service.render_calendar(
@@ -521,6 +529,7 @@ class DeerPipePlugin(Star):
         单人输出日历图片，多人使用 batch_report 模板输出批量报告。
         """
         from .utils import extract_mention_user_ids
+
         messages = event.message_obj.message
         at_list = [m for m in messages if isinstance(m, At)]
         at_ids = extract_mention_user_ids(at_list)
@@ -554,17 +563,23 @@ class DeerPipePlugin(Star):
                 for target_id in at_ids:
                     # 获取用户名称（优先使用 At 组件中的 name）
                     at_component = at_map.get(target_id)
-                    target_name = at_component.name if at_component and at_component.name else target_id
+                    target_name = (
+                        at_component.name
+                        if at_component and at_component.name
+                        else target_id
+                    )
                     allowed = await self.db.is_help_allowed(db, target_id)
                     if not allowed:
-                        results.append({
-                            "user_id": target_id,
-                            "nickname": target_name,
-                            "success": False,
-                            "count": 0,
-                            "is_new": False,
-                            "reason": "不允许被帮🦌"
-                        })
+                        results.append(
+                            {
+                                "user_id": target_id,
+                                "nickname": target_name,
+                                "success": False,
+                                "count": 0,
+                                "is_new": False,
+                                "reason": "不允许被帮🦌",
+                            }
+                        )
                         continue
                     # 记录打卡前检查是否已有记录（用于判断 is_new）
                     has_record_before = await self.db.has_record_today(db, target_id)
@@ -579,13 +594,15 @@ class DeerPipePlugin(Star):
                     )
                     today_count = month_map.get(today.day, 0)
 
-                    results.append({
-                        "user_id": target_id,
-                        "nickname": target_name,
-                        "success": True,
-                        "count": today_count,
-                        "is_new": not has_record_before
-                    })
+                    results.append(
+                        {
+                            "user_id": target_id,
+                            "nickname": target_name,
+                            "success": True,
+                            "count": today_count,
+                            "is_new": not has_record_before,
+                        }
+                    )
                     success_count += 1
 
                 await db.commit()
@@ -610,7 +627,11 @@ class DeerPipePlugin(Star):
                         yield event.plain_result(f"成功帮{target_name}🦌了")
                         yield event.plain_result(cal_result)
                     else:
-                        yield event.make_result().message(f"成功帮{target_name}🦌了").url_image(cal_result)
+                        yield (
+                            event.make_result()
+                            .message(f"成功帮{target_name}🦌了")
+                            .url_image(cal_result)
+                        )
             else:
                 # 多人：使用 batch_report 模板
                 image_url = await self._render_batch_report(results, success_count)
@@ -661,7 +682,11 @@ class DeerPipePlugin(Star):
                 if is_text:
                     yield event.plain_result(f"{target_name} 的鹿历：\n{result}")
                 else:
-                    yield event.make_result().message(f"{target_name} 的鹿历").url_image(result)
+                    yield (
+                        event.make_result()
+                        .message(f"{target_name} 的鹿历")
+                        .url_image(result)
+                    )
         else:
             # 查看自己的鹿历
             async for result, is_text in self.service.render_calendar(
@@ -697,7 +722,11 @@ class DeerPipePlugin(Star):
                 if is_text:
                     yield event.plain_result(f"{target_name} 的上月鹿历：\n{result}")
                 else:
-                    yield event.make_result().message(f"{target_name} 的上月鹿历").url_image(result)
+                    yield (
+                        event.make_result()
+                        .message(f"{target_name} 的上月鹿历")
+                        .url_image(result)
+                    )
         else:
             # 查看自己的上月鹿历
             async for result, is_text in self.service.render_calendar(
@@ -708,7 +737,9 @@ class DeerPipePlugin(Star):
                 else:
                     yield event.make_result().message("上月鹿历").url_image(result)
 
-    async def _render_batch_report(self, results: list[dict], success_count: int) -> str | None:
+    async def _render_batch_report(
+        self, results: list[dict], success_count: int
+    ) -> str | None:
         """渲染批量报告图片.
 
         Args:
@@ -721,7 +752,9 @@ class DeerPipePlugin(Star):
         from pathlib import Path
 
         template_path = Path(__file__).parent / "templates" / "batch_report.html"
-        css_path = Path(__file__).parent / "templates" / "res" / "css" / "batch_report.css"
+        css_path = (
+            Path(__file__).parent / "templates" / "res" / "css" / "batch_report.css"
+        )
 
         if not template_path.exists():
             logger.error(f"批量报告模板不存在: {template_path}")

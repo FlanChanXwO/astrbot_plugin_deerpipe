@@ -239,7 +239,11 @@ class DeerPipeService:
         )
 
     async def render_calendar(
-        self, event: AstrMessageEvent, month_date: dt.date, html_render_func, user_id: str | None = None
+        self,
+        event: AstrMessageEvent,
+        month_date: dt.date,
+        html_render_func,
+        user_id: str | None = None,
     ):
         """渲染日历.
 
