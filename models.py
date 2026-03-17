@@ -21,6 +21,7 @@ class CalendarAssets(TypedDict):
 
     character: str  # 角色图片 base64 data URI
     deer_pipe: str  # deer pipe 图片 base64 data URI
+    undeer_pipe: str  # undeer pipe 图片 base64 data URI（用于未签到日期）
     check: str  # 勾选图标 base64 data URI
 
 
@@ -69,6 +70,8 @@ class CalendarPayload:
         calendar: 日历数据 (按周分组)
         avatar_base64: 用户头像 base64 data URI
         assets: 图片资源字典
+        count_display_mode: 打卡次数显示模式 (additive/count)
+        show_check_mark: 是否显示打勾图标
     """
 
     css_style: str
@@ -77,6 +80,8 @@ class CalendarPayload:
     calendar: list[list[CalendarDay]]
     avatar_base64: str
     assets: CalendarAssets
+    count_display_mode: str = "additive"
+    show_check_mark: bool = True
 
 
 @dataclass

@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=680, initial-scale=2.0" />
+  <meta name="viewport" content="width=1020, initial-scale=1.0" />
   <style>{{ css_style | safe }}</style>
   <title>鹿管日历</title>
 </head>
@@ -31,13 +31,17 @@
     {% for week in calendar %}
     <div class="week-row">
       {% for day in week %}
-      <div class="day-box {% if day.day_of_month == 0 %}empty{% elif day.count > 0 %}active{% endif %}">
+      <div class="day-box {% if day.day_of_month == 0 %}empty{% elif day.count > 0 %}active{% else %}inactive{% endif %}">
         {% if day.day_of_month > 0 %}
         <div class="bg-wrapper">
+          {% if day.count > 0 %}
           <img class="bg-pipe" src="{{ assets.deer_pipe }}" />
+          {% else %}
+          <img class="bg-pipe" src="{{ assets.undeer_pipe }}" />
+          {% endif %}
         </div>
 
-        {% if day.count > 0 %}
+        {% if day.count > 0 and show_check_mark %}
         <img class="check-mark" src="{{ assets.check }}" />
         {% endif %}
 
@@ -45,7 +49,11 @@
 
         {% if day.count > 1 %}
         <div class="count-badge">
+          {% if count_display_mode == 'count' %}
+          <span>{{ '99+' if day.count > 99 else 'x' ~ day.count }}</span>
+          {% else %}
           <span>{{ '99+' if day.count > 99 else '+' ~ (day.count - 1) }}</span>
+          {% endif %}
         </div>
         {% endif %}
         {% endif %}
