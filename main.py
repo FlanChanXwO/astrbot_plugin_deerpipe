@@ -12,8 +12,8 @@ Commands:
     /retro_deer <day> or /补鹿 <day> - Retroactively check in.
     /deer_calendar or /鹿历          - Show this month's deer calendar.
     /last_month_calendar or /上月鹿历 - Show last month's deer calendar.
-    /鹿管数据 导出                    - Admin: export all data.
-    /鹿管数据 导入                    - Admin: import data from JSON.
+    /管理鹿管数据 导出              - Admin: export all data.
+    /管理鹿管数据 导入              - Admin: import data from JSON.
 
 LLM Tools (for AI analysis):
     deer_self         - User self check-in
@@ -49,6 +49,7 @@ from .data_manager import DataManager
 from .database import DatabaseManager
 from .llm_tools import DeerPipeLLMTools
 from .renderer import CalendarRenderer
+from .utils import close_aiohttp_session
 
 
 class DeerPipePlugin(Star):
@@ -106,6 +107,8 @@ class DeerPipePlugin(Star):
     async def terminate(self):
         """插件卸载时清理资源."""
         self._unregister_llm_tools()
+        # 关闭全局 aiohttp ClientSession，避免资源泄漏
+        await close_aiohttp_session()
 
     @filter.on_llm_request()
     async def on_llm_request(self, _: AstrMessageEvent, req: ProviderRequest):
@@ -371,7 +374,7 @@ class DeerPipePlugin(Star):
         Command: /retro_deer <day> or /补鹿 <day>
         Restriction: Limited by daily_retro_limit config.
         """
-        result = await self.service.handle_deer_past(event)
+        result = await self.service.handle_deer_past(event, day)
         if result:
             yield event.plain_result(result)
 
@@ -392,7 +395,8 @@ class DeerPipePlugin(Star):
 
         if at_ids:
             # 查看他人的鹿历
-            target_id = list(at_ids)[0]  # 只取第一个 @ 的人
+            # 使用 at_list 保持消息中的顺序，避免 set 无序导致随机选择
+            target_id = str(at_list[0].qq)
             target_name = at_map.get(target_id, target_id)
             async for result, is_text in self.service.render_calendar(
                 event, dt.date.today(), self.html_render, user_id=target_id
@@ -437,7 +441,8 @@ class DeerPipePlugin(Star):
 
         if at_ids:
             # 查看他人的上月鹿历
-            target_id = list(at_ids)[0]
+            # 使用 at_list 保持消息中的顺序，避免 set 无序导致随机选择
+            target_id = str(at_list[0].qq)
             target_name = at_map.get(target_id, target_id)
             async for result, is_text in self.service.render_calendar(
                 event, last_month, self.html_render, user_id=target_id
@@ -463,7 +468,7 @@ class DeerPipePlugin(Star):
     # ==================================================================
     # Data export/import commands (管理员命令，不是LLM工具)
     # ==================================================================
-    @filter.command_group("鹿管数据", alias={"🦌管数据", "撸管数据"})
+    @filter.command_group("管理鹿管数据")
     def deer_data_group(self) -> None:
         """鹿管数据管理（导入/导出）"""
 
@@ -759,7 +764,7 @@ class DeerPipePlugin(Star):
 
         if at_ids:
             # 查看他人的鹿历
-            target_id = list(at_ids)[0]
+            target_id = str(at_list[0].qq)
             target_name = at_map.get(target_id, target_id)
             async for result, is_text in self.service.render_calendar(
                 event, dt.date.today(), self.html_render, user_id=target_id
@@ -799,7 +804,7 @@ class DeerPipePlugin(Star):
 
         if at_ids:
             # 查看他人的上月鹿历
-            target_id = list(at_ids)[0]
+            target_id = str(at_list[0].qq)
             target_name = at_map.get(target_id, target_id)
             async for result, is_text in self.service.render_calendar(
                 event, last_month, self.html_render, user_id=target_id

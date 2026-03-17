@@ -6,8 +6,11 @@ AI工具函数模块，为LLM提供结构化的数据访问能力。
 
 from __future__ import annotations
 
+import calendar
 import datetime as dt
 from typing import Any
+
+from astrbot.api import logger
 
 from .commands import DeerPipeService
 from .data_manager import DataManager
@@ -116,22 +119,35 @@ class DeerPipeLLMTools:
                 },
                 "calendar_data": month_map,
             }
-        except Exception as e:
+        except Exception:
+            logger.exception(f"deer_self failed: user_id={user_id}")
             return {
                 "success": False,
                 "user_id": user_id,
-                "error": str(e),
+                "error": "INTERNAL_ERROR",
                 "message": "操作失败，请稍后重试。",
             }
         finally:
             await db.close()
 
-    async def deer_other(self, user_id: str, target_ids: list[str]) -> dict[str, Any]:
+    def _is_ai_help_self_allowed(self) -> bool:
+        """检查是否允许AI帮发消息的用户自己打卡.
+
+        Returns:
+            True表示允许
+        """
+        ai_config = self.config.get("ai_behavior", {})
+        return ai_config.get("allow_ai_help_self", True)
+
+    async def deer_other(
+        self, operator_id: str, target_ids: list[str], bot_id: str | None = None
+    ) -> dict[str, Any]:
         """帮他人打卡.
 
         Args:
-            user_id: 操作用户ID
+            operator_id: 操作用户ID
             target_ids: 目标用户ID列表
+            bot_id: Bot自身的ID，用于判断是否在帮AI打卡
 
         Returns:
             打卡结果数据
@@ -142,6 +158,22 @@ class DeerPipeLLMTools:
                 "success": False,
                 "error": "AI_HELP_DEER_DISABLED",
                 "message": "当前配置禁止AI帮用户🦌，请使用 /🦌 或 /鹿 命令自行打卡。",
+            }
+
+        # 检查是否允许AI帮用户自己打卡（如果operator在target列表中）
+        if operator_id in target_ids and not self._is_ai_help_self_allowed():
+            return {
+                "success": False,
+                "error": "AI_HELP_SELF_DISABLED",
+                "message": "当前配置禁止AI帮用户自己打卡，请使用 /🦌 或 /鹿 命令自行打卡。",
+            }
+
+        # 检查是否允许用户帮AI🦌（如果目标包含Bot）
+        if bot_id and bot_id in target_ids and not self._is_ai_be_deered_allowed():
+            return {
+                "success": False,
+                "error": "AI_BE_DEERED_DISABLED",
+                "message": "当前配置禁止帮AI🦌。",
             }
 
         today = dt.date.today()
@@ -177,14 +209,17 @@ class DeerPipeLLMTools:
 
             return {
                 "success": True,
-                "operator_id": user_id,
+                "operator_id": operator_id,
                 "date": today.isoformat(),
                 "results": results,
             }
-        except Exception as e:
+        except Exception:
+            logger.exception(
+                f"deer_other failed: operator_id={operator_id}, target_ids={target_ids}"
+            )
             return {
                 "success": False,
-                "error": str(e),
+                "error": "INTERNAL_ERROR",
                 "message": "操作失败，请稍后重试。",
             }
         finally:
@@ -248,11 +283,14 @@ class DeerPipeLLMTools:
                     else 0,
                 },
             }
-        except Exception as e:
+        except Exception:
+            logger.exception(
+                f"get_calendar failed: user_id={user_id}, year={year}, month={month}"
+            )
             return {
                 "success": False,
                 "user_id": user_id,
-                "error": str(e),
+                "error": "INTERNAL_ERROR",
                 "message": "加载🦌历失败。",
             }
         finally:
@@ -309,12 +347,19 @@ class DeerPipeLLMTools:
         month = month or today.month
 
         # 验证日期
-        import calendar
-
         if day < 1 or day > calendar.monthrange(year, month)[1]:
             return {
                 "success": False,
                 "error": f"日期无效，本月范围为 1-{calendar.monthrange(year, month)[1]}",
+            }
+
+        # 检查不能对未来日期补签
+        target_date = dt.date(year, month, day)
+        if target_date > today:
+            return {
+                "success": False,
+                "error": "FUTURE_DATE_NOT_ALLOWED",
+                "message": "不能对未来的日期补🦌哦~",
             }
 
         db = await self.db.get_connection()
@@ -343,10 +388,13 @@ class DeerPipeLLMTools:
                 "retro_count": retro_count + 1,
                 "daily_limit": daily_limit,
             }
-        except Exception as e:
+        except Exception:
+            logger.exception(
+                f"retro_deer failed: user_id={user_id}, year={year}, month={month}, day={day}"
+            )
             return {
                 "success": False,
-                "error": str(e),
+                "error": "INTERNAL_ERROR",
                 "message": "操作失败，请稍后重试。",
             }
         finally:
@@ -375,10 +423,13 @@ class DeerPipeLLMTools:
                 if allowed
                 else "已关闭，现在只有你自己能🦌了！",
             }
-        except Exception as e:
+        except Exception:
+            logger.exception(
+                f"set_allow_help failed: user_id={user_id}, allowed={allowed}"
+            )
             return {
                 "success": False,
-                "error": str(e),
+                "error": "INTERNAL_ERROR",
                 "message": "操作失败，请稍后重试。",
             }
         finally:
@@ -430,10 +481,13 @@ class DeerPipeLLMTools:
                 },
                 "last_retro": last_retro,
             }
-        except Exception as e:
+        except Exception:
+            logger.exception(f"get_user_stats failed: user_id={user_id}")
             return {
                 "success": False,
-                "error": str(e),
+                "user_id": user_id,
+                "error": "INTERNAL_ERROR",
+                "message": "获取用户统计失败。",
             }
         finally:
             await db.close()

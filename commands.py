@@ -5,8 +5,8 @@
 
 from __future__ import annotations
 
+import calendar
 import datetime as dt
-import re
 
 from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent
@@ -178,7 +178,9 @@ class DeerPipeService:
             return self._get_template("group_only").format()
 
         # 提取提及的用户
-        at_ids = extract_mention_user_ids(event.message_str)
+        messages = event.message_obj.message
+        at_list = [m for m in messages if isinstance(m, At)]
+        at_ids = extract_mention_user_ids(at_list)
         if not at_ids:
             return "请 @目标用户。"
 
@@ -198,21 +200,16 @@ class DeerPipeService:
 
         return "\n".join(logs) if logs else "没有成功设置任何用户。"
 
-    async def handle_deer_past(self, event: AstrMessageEvent) -> str | None:
+    async def handle_deer_past(self, event: AstrMessageEvent, day: int) -> str | None:
         """处理补🦌.
 
         Args:
             event: 消息事件
+            day: 要补签的日期（日）
 
         Returns:
             操作结果消息，None 表示不处理
         """
-        # 提取日期数字
-        match = re.search(r"(\d+)$", event.message_str.strip())
-        if not match:
-            return None
-        day = int(match.group(1))
-
         today = dt.date.today()
 
         # 验证日期有效性
@@ -220,17 +217,25 @@ class DeerPipeService:
         if not valid:
             return error_msg
 
+        # 检查不能对未来日期补签
+        target_date = dt.date(today.year, today.month, day)
+        if target_date > today:
+            return "不能对未来的日期补🦌哦~"
+
         user_id = event.get_sender_id()
         db = await self.db.get_connection()
         try:
-            # 检查今日是否已补过
-            last_retro = await self.db.get_last_retro_date(db, user_id)
-            if last_retro == today.isoformat():
+            # 检查今日补签次数是否已达上限
+            limits_config = self.config.get("limits", {})
+            daily_retro_limit = limits_config.get("daily_retro_limit", 1)
+
+            retro_count_today = await self.db.get_retro_count_today(db, user_id)
+            if retro_count_today >= daily_retro_limit:
                 return self._get_template("deer_past_limit").format()
 
             # 执行补 deer
             await self.db.record_attendance(db, user_id, today.year, today.month, day)
-            await self.db.set_last_retro_date(db, user_id, today.isoformat())
+            await self.db.increment_retro_count(db, user_id, today.isoformat())
             await db.commit()
         except Exception as exc:
             logger.error(f"deer_past failed: {exc}")
@@ -314,8 +319,6 @@ class DeerPipeService:
         Returns:
             格式化的纯文本日历
         """
-        import calendar
-
         total = sum(month_map.values())
         days_recorded = len(month_map)
 
