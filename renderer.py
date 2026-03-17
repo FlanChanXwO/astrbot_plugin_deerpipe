@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import base64
 import calendar
+import hashlib
 from pathlib import Path
 from typing import Literal
 
@@ -182,9 +183,11 @@ class CalendarRenderer:
             # 初阶: character_1.png ~ character_4.png
             start, end = 1, 4
 
-        # 使用user_id哈希确定性地选择索引
-        hash_value = hash(f"{user_id}:{total_count}")
-        index = start + (abs(hash_value) % (end - start + 1))
+        # 使用user_id哈希确定性地选择索引 (使用 hashlib 保证跨进程一致性)
+        hash_input = f"{user_id}:{total_count}".encode("utf-8")
+        hash_hex = hashlib.md5(hash_input).hexdigest()
+        hash_value = int(hash_hex, 16)
+        index = start + (hash_value % (end - start + 1))
 
         return self._get_image_data_uri(f"character_{index}.png")
 
