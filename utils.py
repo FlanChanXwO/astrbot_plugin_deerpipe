@@ -132,10 +132,16 @@ def parse_allow_flag(text: str) -> bool | None:
 
     # 匹配 "开"、"on"、"允许" 作为独立词
     # 使用负向前瞻/后瞻确保是独立词，适配中英文混合场景
-    if re.search(r'(^|[\s,，.;:；：])(开|on|允许)(?=[\s,，.;:；：]|$)', normalized, re.IGNORECASE):
+    if re.search(
+        r"(^|[\s,，.;:；：])(开|on|允许)(?=[\s,，.;:；：]|$)", normalized, re.IGNORECASE
+    ):
         return True
     # 匹配 "关"、"off"、"禁止" 作为独立词
-    if re.search(r'(^|[\s,，.;:；：])(关|off|禁止)(?=[\s,，.;:；：]|$)', normalized, re.IGNORECASE):
+    if re.search(
+        r"(^|[\s,，.;:；：])(关|off|禁止)(?=[\s,，.;:；：]|$)",
+        normalized,
+        re.IGNORECASE,
+    ):
         return False
     return None
 
