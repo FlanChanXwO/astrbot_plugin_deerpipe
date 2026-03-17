@@ -16,6 +16,12 @@
         "hint": "开启后，用户可以通过 deer_other 工具帮 AI 打卡。关闭则 AI 不会接受被🦌。",
         "default": false
       },
+      "allow_ai_help_self": {
+        "type": "bool",
+        "description": "允许 AI 帮用户自己打卡",
+        "hint": "开启后，用户可以让 AI 帮自己打卡（deer_other 自己）。关闭则 AI 只能帮别人打卡，不能帮发消息的用户自己打卡。",
+        "default": true
+      },
       "custom_prompt": {
         "type": "string",
         "description": "自定义 LLM Prompt",

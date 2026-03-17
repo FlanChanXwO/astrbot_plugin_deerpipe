@@ -12,8 +12,8 @@ Commands:
     /retro_deer <day> or /补鹿 <day> - Retroactively check in.
     /deer_calendar or /鹿历          - Show this month's deer calendar.
     /last_month_calendar or /上月鹿历 - Show last month's deer calendar.
-    /鹿管数据 导出                    - Admin: export all data.
-    /鹿管数据 导入                    - Admin: import data from JSON.
+    /管理鹿管数据 导出              - Admin: export all data.
+    /管理鹿管数据 导入              - Admin: import data from JSON.
 
 LLM Tools (for AI analysis):
     deer_self         - User self check-in
@@ -465,7 +465,7 @@ class DeerPipePlugin(Star):
     # ==================================================================
     # Data export/import commands (管理员命令，不是LLM工具)
     # ==================================================================
-    @filter.command_group("鹿管数据", alias={"🦌管数据", "撸管数据"})
+    @filter.command_group("管理鹿管数据")
     def deer_data_group(self) -> None:
         """鹿管数据管理（导入/导出）"""
 

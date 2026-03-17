@@ -127,6 +127,15 @@ class DeerPipeLLMTools:
         finally:
             await db.close()
 
+    def _is_ai_help_self_allowed(self) -> bool:
+        """检查是否允许AI帮发消息的用户自己打卡.
+
+        Returns:
+            True表示允许
+        """
+        ai_config = self.config.get("ai_behavior", {})
+        return ai_config.get("allow_ai_help_self", True)
+
     async def deer_other(
         self, operator_id: str, target_ids: list[str], bot_id: str | None = None
     ) -> dict[str, Any]:
@@ -146,6 +155,14 @@ class DeerPipeLLMTools:
                 "success": False,
                 "error": "AI_HELP_DEER_DISABLED",
                 "message": "当前配置禁止AI帮用户🦌，请使用 /🦌 或 /鹿 命令自行打卡。",
+            }
+
+        # 检查是否允许AI帮用户自己打卡（如果operator在target列表中）
+        if operator_id in target_ids and not self._is_ai_help_self_allowed():
+            return {
+                "success": False,
+                "error": "AI_HELP_SELF_DISABLED",
+                "message": "当前配置禁止AI帮用户自己打卡，请使用 /🦌 或 /鹿 命令自行打卡。",
             }
 
         # 检查是否允许用户帮AI🦌（如果目标包含Bot）
