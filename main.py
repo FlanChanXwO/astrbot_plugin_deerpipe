@@ -121,9 +121,7 @@ class DeerPipePlugin(Star):
             logger.debug("[DeerPipe] 当前 custom_prompt 长度: %d", len(custom_prompt))
             # 防护 system_prompt 为 None 的情况
             current_prompt = req.system_prompt or ""
-            logger.debug(
-                "[DeerPipe] 当前 system_prompt 长度: %d", len(current_prompt)
-            )
+            logger.debug("[DeerPipe] 当前 system_prompt 长度: %d", len(current_prompt))
             req.system_prompt = f"{current_prompt}\n\n{custom_prompt}"
             logger.debug(
                 "[DeerPipe] 已追加 custom_prompt，当前 system_prompt 长度: %d",
