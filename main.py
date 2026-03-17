@@ -108,9 +108,13 @@ class DeerPipePlugin(Star):
 
         如果配置了 custom_prompt，则将其追加到 system_prompt 中。
         """
-        custom_prompt = self.config.get("custom_prompt", "")
-        req.system_prompt += f"\n\n{custom_prompt}"
-        logger.debug("deer prompt = %s",req.system_prompt)
+        ai_config = self.config.get("ai_behavior", {})
+        custom_prompt = ai_config.get("custom_prompt", "") if isinstance(ai_config, dict) else ""
+        if custom_prompt:
+            logger.debug("[DeerPipe] 当前 custom_prompt 长度: %d", len(custom_prompt))
+            logger.debug("[DeerPipe] 当前 system_prompt 长度: %d", len(req.system_prompt))
+            req.system_prompt += f"\n\n{custom_prompt}"
+            logger.debug("[DeerPipe] 已追加 custom_prompt，当前 system_prompt 长度: %d", len(req.system_prompt))
 
     def _unregister_llm_tools(self):
         """注销所有LLM工具函数."""
