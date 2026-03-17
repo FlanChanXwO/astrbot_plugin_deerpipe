@@ -371,7 +371,7 @@ class DeerPipePlugin(Star):
         Command: /retro_deer <day> or /补鹿 <day>
         Restriction: Limited by daily_retro_limit config.
         """
-        result = await self.service.handle_deer_past(event)
+        result = await self.service.handle_deer_past(event, day)
         if result:
             yield event.plain_result(result)
 
@@ -392,7 +392,8 @@ class DeerPipePlugin(Star):
 
         if at_ids:
             # 查看他人的鹿历
-            target_id = list(at_ids)[0]  # 只取第一个 @ 的人
+            # 使用 at_list 保持消息中的顺序，避免 set 无序导致随机选择
+            target_id = str(at_list[0].qq)
             target_name = at_map.get(target_id, target_id)
             async for result, is_text in self.service.render_calendar(
                 event, dt.date.today(), self.html_render, user_id=target_id
@@ -437,7 +438,8 @@ class DeerPipePlugin(Star):
 
         if at_ids:
             # 查看他人的上月鹿历
-            target_id = list(at_ids)[0]
+            # 使用 at_list 保持消息中的顺序，避免 set 无序导致随机选择
+            target_id = str(at_list[0].qq)
             target_name = at_map.get(target_id, target_id)
             async for result, is_text in self.service.render_calendar(
                 event, last_month, self.html_render, user_id=target_id
@@ -759,7 +761,7 @@ class DeerPipePlugin(Star):
 
         if at_ids:
             # 查看他人的鹿历
-            target_id = list(at_ids)[0]
+            target_id = str(at_list[0].qq)
             target_name = at_map.get(target_id, target_id)
             async for result, is_text in self.service.render_calendar(
                 event, dt.date.today(), self.html_render, user_id=target_id
@@ -799,7 +801,7 @@ class DeerPipePlugin(Star):
 
         if at_ids:
             # 查看他人的上月鹿历
-            target_id = list(at_ids)[0]
+            target_id = str(at_list[0].qq)
             target_name = at_map.get(target_id, target_id)
             async for result, is_text in self.service.render_calendar(
                 event, last_month, self.html_render, user_id=target_id

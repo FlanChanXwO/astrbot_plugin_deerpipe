@@ -6,6 +6,8 @@
 from __future__ import annotations
 
 import base64
+import calendar
+import re
 from pathlib import Path
 
 import aiohttp
@@ -15,6 +17,21 @@ from astrbot.core.message.components import At
 
 # HTTP 请求超时时间 (秒)
 HTTP_TIMEOUT_SECONDS = 15
+
+# 全局共享的 aiohttp ClientSession
+_aiohttp_session: aiohttp.ClientSession | None = None
+
+
+def _get_aiohttp_session() -> aiohttp.ClientSession:
+    """获取全局共享的 aiohttp ClientSession.
+
+    Returns:
+        全局共享的 ClientSession 实例
+    """
+    global _aiohttp_session
+    if _aiohttp_session is None or _aiohttp_session.closed:
+        _aiohttp_session = aiohttp.ClientSession()
+    return _aiohttp_session
 
 
 def image_to_data_uri(image_path: Path) -> str:
@@ -43,6 +60,7 @@ async def fetch_avatar_base64(user_id: str, timeout: int = HTTP_TIMEOUT_SECONDS)
     """获取 QQ 用户头像并转换为 base64 data URI.
 
     从 QQ 头像服务获取用户头像，失败时返回空字符串。
+    使用全局共享的 ClientSession 以提高性能。
 
     Args:
         user_id: QQ 用户 ID
@@ -55,12 +73,12 @@ async def fetch_avatar_base64(user_id: str, timeout: int = HTTP_TIMEOUT_SECONDS)
     client_timeout = aiohttp.ClientTimeout(total=timeout)
 
     try:
-        async with aiohttp.ClientSession(timeout=client_timeout) as session:
-            async with session.get(avatar_url) as resp:
-                resp.raise_for_status()
-                data = await resp.read()
-                b64 = base64.b64encode(data).decode("ascii")
-                return f"data:image/png;base64,{b64}"
+        session = _get_aiohttp_session()
+        async with session.get(avatar_url, timeout=client_timeout) as resp:
+            resp.raise_for_status()
+            data = await resp.read()
+            b64 = base64.b64encode(data).decode("ascii")
+            return f"data:image/png;base64,{b64}"
     except Exception as e:
         logger.warning(f"获取头像失败 {user_id}: {e}")
         return ""
@@ -81,7 +99,8 @@ def extract_mention_user_ids(messages: list[At]) -> set[str]:
 def parse_allow_flag(text: str) -> bool | None:
     """解析允许/开启标志.
 
-    从文本中解析开关状态。
+    从文本中解析开关状态。使用正则匹配避免子串误判
+    （例如"不要开启"不应被误判为"开启"）。
 
     Args:
         text: 包含开关标志的文本
@@ -89,9 +108,12 @@ def parse_allow_flag(text: str) -> bool | None:
     Returns:
         True 表示开启/允许，False 表示关闭/禁止，None 表示无法解析
     """
-    if any(kw in text for kw in ("开", "on", "允许")):
+    # 使用正则匹配完整词或边界，避免子串误判
+    # 匹配 "开"、"on"、"允许" 作为独立词
+    if re.search(r'\b(开|on|允许)\b', text, re.IGNORECASE):
         return True
-    if any(kw in text for kw in ("关", "off", "禁止")):
+    # 匹配 "关"、"off"、"禁止" 作为独立词
+    if re.search(r'\b(关|off|禁止)\b', text, re.IGNORECASE):
         return False
     return None
 
@@ -107,8 +129,6 @@ def validate_day(day: int, year: int, month: int) -> tuple[bool, str]:
     Returns:
         (是否有效, 错误信息)
     """
-    import calendar
-
     if day < 1:
         return False, "日期必须大于等于 1"
 

@@ -8,12 +8,19 @@ from __future__ import annotations
 import base64
 import calendar
 import hashlib
+import time
 from pathlib import Path
 from typing import Literal
 
 from astrbot.api import logger
 
 from .models import CalendarAssets, CalendarDay, CalendarPayload
+from .utils import fetch_avatar_base64
+
+# 头像缓存: {user_id: (timestamp, data_uri)}
+_avatar_cache: dict[str, tuple[float, str]] = {}
+# 缓存有效期 (秒)
+AVATAR_CACHE_TTL = 3600  # 1小时
 
 
 class CalendarRenderer:
@@ -24,6 +31,32 @@ class CalendarRenderer:
 
     # 字体文件大小限制: 1MB (避免 HTTP 422 payload too large)
     MAX_FONT_SIZE = 1 * 1024 * 1024
+
+    @staticmethod
+    async def _get_cached_avatar(user_id: str) -> str:
+        """获取用户头像，带 TTL 缓存.
+
+        Args:
+            user_id: 用户 ID
+
+        Returns:
+            头像的 base64 data URI，失败返回空字符串
+        """
+        now = time.time()
+
+        # 检查缓存是否有效
+        if user_id in _avatar_cache:
+            timestamp, data = _avatar_cache[user_id]
+            if now - timestamp < AVATAR_CACHE_TTL:
+                logger.debug(f"[DeerPipe] 头像缓存命中: {user_id}")
+                return data
+
+        # 缓存未命中或已过期，重新获取
+        data = await fetch_avatar_base64(user_id)
+        if data:
+            _avatar_cache[user_id] = (now, data)
+            logger.debug(f"[DeerPipe] 头像缓存更新: {user_id}")
+        return data
 
     def __init__(self, base_dir: Path) -> None:
         """初始化日历渲染器.
@@ -238,9 +271,6 @@ class CalendarRenderer:
         Returns:
             日历渲染数据负载
         """
-        from .models import CalendarPayload
-        from .utils import fetch_avatar_base64
-
         # 读取 CSS 并处理字体嵌入
         css_content = ""
         if self.css_path.exists():
@@ -257,8 +287,8 @@ class CalendarRenderer:
             count_display_mode = "additive"
         calendar_weeks = self._build_calendar_data(month_map, year, month)
 
-        # 获取用户头像
-        avatar_b64 = await fetch_avatar_base64(user_id)
+        # 获取用户头像（带缓存）
+        avatar_b64 = await self._get_cached_avatar(user_id)
 
         # 加载图片资源（根据打卡次数选择角色图片）
         assets = self._load_assets(user_id, month_map)
