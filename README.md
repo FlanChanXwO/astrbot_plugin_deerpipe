@@ -2,11 +2,15 @@
 
 <div align="center">
 
+<img src="https://raw.githubusercontent.com/FlanChanXwO/astrbot_plugin_deerpipe/master/logo.png" width="400" alt="Setu 插件"/>
+
+<br/>
+
 <img src="https://count.getloli.com/@astrbot_plugin_deerpipe?name=astrbot_plugin_deerpipe&theme=rule34&padding=7&offset=0&align=top&scale=1&pixelated=1&darkmode=auto" alt="Moe Counter">
 
-**一个可爱的每日打卡插件，记录你的每一次🦌，生成精美的打卡日历。**
+**一个可爱的每日🦌插件，记录你的每一次🦌，生成精美的打卡日历。**
 
-[![License: APGL](https://img.shields.io/badge/License-APGL-blue.svg)](https://opensource.org/licenses/MIT)
+[![License: AGPL](https://img.shields.io/badge/License-AGPL-blue.svg)](https://opensource.org/licenses/agpl-3-0)
 ![Python Version](https://img.shields.io/badge/Python-3.10%2B-blue)
 ![AstrBot](https://img.shields.io/badge/AstrBot-%E2%89%A54.10.4-green)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-lightgrey)
@@ -24,12 +28,12 @@
   <table>
     <tr>
       <td align="center">
-        <img src="https://raw.githubusercontent.com/FlanChanXwO/astrbot_plugin_deerpipe/master/assets/preview_calendar.png" width="400" alt="日历预览"/>
+        <img src="https://raw.githubusercontent.com/FlanChanXwO/astrbot_plugin_deerpipe/master/assets/img_1.png" width="400" alt="日历预览"/>
         <br/>
-        <sub>🦌历 - 打卡日历</sub>
+        <sub>🦌历</sub>
       </td>
       <td align="center">
-        <img src="https://raw.githubusercontent.com/FlanChanXwO/astrbot_plugin_deerpipe/master/assets/preview_batch.png" width="400" alt="批量报告预览"/>
+        <img src="https://raw.githubusercontent.com/FlanChanXwO/astrbot_plugin_deerpipe/master/assets/img_2.png" width="400" alt="批量报告预览"/>
         <br/>
         <sub>批量帮🦌报告</sub>
       </td>
@@ -72,11 +76,36 @@
 
 ## 🛠️ 配置项
 
+在 AstrBot 管理面板的「配置」页面，找到 `astrbot_plugin_deerpipe` 插件配置：
+
+### AI 行为配置 (`ai_behavior`)
+
 | 配置项 | 类型 | 说明 | 默认值 |
 |--------|------|------|--------|
-| `allow_ai_help_deer` | 布尔值 | 是否允许 AI 帮用户打卡 | `false` |
-| `allow_ai_be_deered` | 布尔值 | 是否允许用户帮 AI 打卡 | `false` |
-| `daily_retro_limit` | 整数 | 每日最多补卡次数 | `1` |
+| `ai_behavior.allow_ai_help_deer` | 布尔值 | 是否允许 AI 帮用户打卡 | `true` |
+| `ai_behavior.allow_ai_be_deered` | 布尔值 | 是否允许用户帮 AI 打卡 | `false` |
+| `ai_behavior.custom_prompt` | 字符串 | 自定义 LLM Prompt，影响 AI 对🦌行为的认知和回复风格 | `""` |
+
+### 限制配置 (`limits`)
+
+| 配置项 | 类型 | 说明 | 默认值 |
+|--------|------|------|--------|
+| `limits.daily_retro_limit` | 整数 | 每日最多补卡次数（0-31，0表示禁止补卡） | `1` |
+
+### 日历配置 (`calendar`)
+
+| 配置项 | 类型 | 说明 | 默认值 |
+|--------|------|------|--------|
+| `calendar.count_display_mode` | 字符串 | 打卡次数显示模式：`additive`（附加模式，显示为+1）或 `count`（计数模式，显示为x2） | `"additive"` |
+| `calendar.show_check_mark` | 布尔值 | 是否在签到区块显示打勾图标 | `true` |
+
+**显示模式说明：**
+- **附加模式** (`additive`)：打卡2次显示为 打勾图标 + "+1"
+- **计数模式** (`count`)：打卡2次显示为 打勾图标 + "x2"
+
+**打勾图标说明：**
+- 开启 `show_check_mark`：签到日期会显示打勾图标 ✓
+- 关闭 `show_check_mark`：签到日期只显示打卡次数，不显示打勾图标
 
 ---
 
@@ -90,6 +119,8 @@
 | `/deer @用户` 或 `🦌 @用户` | 帮他人打卡 |
 | `/允许被🦌` | 允许他人帮自己打卡 |
 | `/禁止被🦌` | 禁止他人帮自己打卡 |
+| `/设置被鹿 开 @用户` | 管理员：允许指定用户被帮打卡 |
+| `/设置被鹿 关 @用户` | 管理员：禁止指定用户被帮打卡 |
 | `/补鹿 <日期>` | 补录指定日期的打卡 |
 | `/鹿历` | 查看本月打卡日历 |
 | `/上月鹿历` | 查看上月打卡日历 |
@@ -138,11 +169,6 @@
 
 ## 📄 开源协议
 
-本项目基于 [APGL](LICENSE) 协议开源。
+本项目基于 [AGPL](LICENSE) 协议开源。
 
 ---
-
-## 🙏 致谢
-
-- 原 Java 版本：[WineFoxBot-DeerpipePlugin](https://github.com/yourrepo)
-- [AstrBot](https://github.com/AstrBotDevs/AstrBot) - 优秀的聊天机器人框架

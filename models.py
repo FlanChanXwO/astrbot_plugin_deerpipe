@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TypedDict
+from typing import Literal, TypedDict
 
 
 class CalendarDay(TypedDict):
@@ -80,7 +80,7 @@ class CalendarPayload:
     calendar: list[list[CalendarDay]]
     avatar_base64: str
     assets: CalendarAssets
-    count_display_mode: str = "additive"
+    count_display_mode: Literal["additive", "count"] = "additive"
     show_check_mark: bool = True
 
 
