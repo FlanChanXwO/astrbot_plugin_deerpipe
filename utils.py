@@ -110,10 +110,10 @@ def parse_allow_flag(text: str) -> bool | None:
     """
     # 使用正则匹配完整词或边界，避免子串误判
     # 匹配 "开"、"on"、"允许" 作为独立词
-    if re.search(r'\b(开|on|允许)\b', text, re.IGNORECASE):
+    if re.search(r"\b(开|on|允许)\b", text, re.IGNORECASE):
         return True
     # 匹配 "关"、"off"、"禁止" 作为独立词
-    if re.search(r'\b(关|off|禁止)\b', text, re.IGNORECASE):
+    if re.search(r"\b(关|off|禁止)\b", text, re.IGNORECASE):
         return False
     return None
 

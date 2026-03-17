@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import calendar
 import datetime as dt
-import re
 
 from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent
