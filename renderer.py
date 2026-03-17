@@ -248,7 +248,9 @@ class CalendarRenderer:
 
         # 验证并规范化 count_display_mode
         if count_display_mode not in ("additive", "count"):
-            logger.warning(f"Invalid count_display_mode: {count_display_mode}, using 'additive'")
+            logger.warning(
+                f"Invalid count_display_mode: {count_display_mode}, using 'additive'"
+            )
             count_display_mode = "additive"
         calendar_weeks = self._build_calendar_data(month_map, year, month)
 
