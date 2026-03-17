@@ -110,7 +110,7 @@ class DeerPipePlugin(Star):
         """
         custom_prompt = self.config.get("custom_prompt", "")
         req.system_prompt += f"\n\n{custom_prompt}"
-        logger.debug("deer prompt = %s",req.system_prompt)
+        logger.debug("deer prompt = %s", req.system_prompt)
 
     def _unregister_llm_tools(self):
         """注销所有LLM工具函数."""
@@ -271,7 +271,9 @@ class DeerPipePlugin(Star):
 
         # 发送🦌历图片
         if calendar_result.get("success"):
-            target_date = dt.date(year_val or dt.date.today().year, month_val or dt.date.today().month, 1)
+            target_date = dt.date(
+                year_val or dt.date.today().year, month_val or dt.date.today().month, 1
+            )
             async for cal_result, is_text in self.service.render_calendar(
                 event, target_date, self.html_render, user_id=user_id
             ):

@@ -101,6 +101,7 @@ class DeerPipeService:
 
         # 从消息中提取 @ 列表
         from astrbot.core.message.components import At
+
         messages = event.message_obj.message
         at_list = [m for m in messages if isinstance(m, At)]
         at_ids = extract_mention_user_ids(at_list)
