@@ -290,7 +290,9 @@ class CalendarRenderer:
         html = self.template_path.read_text(encoding="utf-8")
 
         # 构建数据负载
-        payload = await self.build_payload(user_id, year, month, month_map, count_display_mode, show_check_mark)
+        payload = await self.build_payload(
+            user_id, year, month, month_map, count_display_mode, show_check_mark
+        )
 
         # 转换为字典 (html_render 需要字典格式)
         payload_dict = {
