@@ -304,7 +304,9 @@ class DeerPipePlugin(Star):
                     else:
                         await event.send(event.image_result(cal_result))
             except ValueError as exc:
-                logger.warning(f"Invalid date parameters: year={year}, month={month}, exc={exc}")
+                logger.warning(
+                    f"Invalid date parameters: year_val={year_val}, month_val={month_val}, exc={exc}"
+                )
 
         return json.dumps(result, ensure_ascii=False)
 

@@ -30,24 +30,26 @@ AVATAR_CACHE_MAX_SIZE = 1024
 
 
 async def _cleanup_avatar_cache(now: float | None = None) -> None:
-    """清理过期的头像缓存，并在必要时进行容量控制。"""
+    """清理过期的头像缓存，并在必要时进行容量控制。
+
+    注意：调用此函数前必须已持有 _avatar_cache_lock，本函数内部不再获取锁。
+    """
     if now is None:
         now = time.time()
 
-    async with _avatar_cache_lock:
-        # 删除已过期的条目
-        expired_keys = [
-            user_id
-            for user_id, (timestamp, _data_uri) in _avatar_cache.items()
-            if now - timestamp > AVATAR_CACHE_TTL
-        ]
-        for user_id in expired_keys:
-            _avatar_cache.pop(user_id, None)
+    # 删除已过期的条目
+    expired_keys = [
+        user_id
+        for user_id, (timestamp, _data_uri) in _avatar_cache.items()
+        if now - timestamp > AVATAR_CACHE_TTL
+    ]
+    for user_id in expired_keys:
+        _avatar_cache.pop(user_id, None)
 
-        # 控制缓存大小，超出时从最旧的条目开始淘汰
-        while len(_avatar_cache) > AVATAR_CACHE_MAX_SIZE:
-            # OrderedDict.popitem(last=False) 弹出最早插入/最久未使用的条目
-            _avatar_cache.popitem(last=False)
+    # 控制缓存大小，超出时从最旧的条目开始淘汰
+    while len(_avatar_cache) > AVATAR_CACHE_MAX_SIZE:
+        # OrderedDict.popitem(last=False) 弹出最早插入/最久未使用的条目
+        _avatar_cache.popitem(last=False)
 
 
 class CalendarRenderer:
