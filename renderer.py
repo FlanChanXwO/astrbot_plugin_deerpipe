@@ -5,15 +5,51 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import calendar
 import hashlib
+import time
+from collections import OrderedDict
 from pathlib import Path
 from typing import Literal
 
 from astrbot.api import logger
 
 from .models import CalendarAssets, CalendarDay, CalendarPayload
+from .utils import fetch_avatar_base64
+
+# 头像缓存: OrderedDict 实现 LRU 淘汰策略
+_avatar_cache: OrderedDict[str, tuple[float, str]] = OrderedDict()
+# 缓存操作锁，防止并发问题
+_avatar_cache_lock = asyncio.Lock()
+# 缓存有效期 (秒)
+AVATAR_CACHE_TTL = 3600  # 1小时
+# 缓存最大条目数，防止内存无限增长
+AVATAR_CACHE_MAX_SIZE = 1024
+
+
+async def _cleanup_avatar_cache(now: float | None = None) -> None:
+    """清理过期的头像缓存，并在必要时进行容量控制。
+
+    注意：调用此函数前必须已持有 _avatar_cache_lock，本函数内部不再获取锁。
+    """
+    if now is None:
+        now = time.time()
+
+    # 删除已过期的条目
+    expired_keys = [
+        user_id
+        for user_id, (timestamp, _data_uri) in _avatar_cache.items()
+        if now - timestamp > AVATAR_CACHE_TTL
+    ]
+    for user_id in expired_keys:
+        _avatar_cache.pop(user_id, None)
+
+    # 控制缓存大小，超出时从最旧的条目开始淘汰
+    while len(_avatar_cache) > AVATAR_CACHE_MAX_SIZE:
+        # OrderedDict.popitem(last=False) 弹出最早插入/最久未使用的条目
+        _avatar_cache.popitem(last=False)
 
 
 class CalendarRenderer:
@@ -24,6 +60,42 @@ class CalendarRenderer:
 
     # 字体文件大小限制: 1MB (避免 HTTP 422 payload too large)
     MAX_FONT_SIZE = 1 * 1024 * 1024
+
+    @staticmethod
+    async def _get_cached_avatar(user_id: str) -> str:
+        """获取用户头像，带 TTL 缓存和 LRU 淘汰策略.
+
+        Args:
+            user_id: 用户 ID
+
+        Returns:
+            头像的 base64 data URI，失败返回空字符串
+        """
+        now = time.time()
+
+        # 检查缓存是否有效（加锁保护）
+        async with _avatar_cache_lock:
+            cached = _avatar_cache.get(user_id)
+            if cached is not None:
+                timestamp, data = cached
+                if now - timestamp < AVATAR_CACHE_TTL:
+                    logger.debug(f"[DeerPipe] 头像缓存命中: {user_id}")
+                    # 更新访问顺序（LRU：将最新使用的移到队尾）
+                    _avatar_cache.move_to_end(user_id)
+                    return data
+                # 缓存已过期，删除
+                _avatar_cache.pop(user_id, None)
+
+        # 缓存未命中或已过期，重新获取（在锁外进行网络请求）
+        data = await fetch_avatar_base64(user_id)
+        if data:
+            # 清理过期条目并控制容量，然后添加新条目
+            async with _avatar_cache_lock:
+                await _cleanup_avatar_cache(now)
+                _avatar_cache[user_id] = (now, data)
+                _avatar_cache.move_to_end(user_id)
+            logger.debug(f"[DeerPipe] 头像缓存更新: {user_id}")
+        return data
 
     def __init__(self, base_dir: Path) -> None:
         """初始化日历渲染器.
@@ -183,8 +255,10 @@ class CalendarRenderer:
             # 初阶: character_1.png ~ character_4.png
             start, end = 1, 4
 
-        # 使用user_id哈希确定性地选择索引 (使用 hashlib 保证跨进程一致性)
-        hash_input = f"{user_id}:{total_count}".encode("utf-8")
+        # 使用user_id哈希确定性地选择索引
+        # 注意：使用 hashlib.md5 仅用于非安全目的的确定性哈希（资源选择），
+        # 不涉及密码学安全场景。这样可以保证同一用户跨进程渲染结果一致。
+        hash_input = f"{user_id}:{total_count}".encode()
         hash_hex = hashlib.md5(hash_input).hexdigest()
         hash_value = int(hash_hex, 16)
         index = start + (hash_value % (end - start + 1))
@@ -238,9 +312,6 @@ class CalendarRenderer:
         Returns:
             日历渲染数据负载
         """
-        from .models import CalendarPayload
-        from .utils import fetch_avatar_base64
-
         # 读取 CSS 并处理字体嵌入
         css_content = ""
         if self.css_path.exists():
@@ -257,8 +328,8 @@ class CalendarRenderer:
             count_display_mode = "additive"
         calendar_weeks = self._build_calendar_data(month_map, year, month)
 
-        # 获取用户头像
-        avatar_b64 = await fetch_avatar_base64(user_id)
+        # 获取用户头像（带缓存）
+        avatar_b64 = await self._get_cached_avatar(user_id)
 
         # 加载图片资源（根据打卡次数选择角色图片）
         assets = self._load_assets(user_id, month_map)

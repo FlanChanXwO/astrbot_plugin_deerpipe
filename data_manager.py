@@ -59,6 +59,60 @@ class DataManager:
         if "deer_records" not in data and "user_configs" not in data:
             return False, "数据格式无效，未找到用户配置或打卡记录。"
 
+        # 验证 user_configs 结构
+        if "user_configs" in data:
+            if not isinstance(data["user_configs"], list):
+                return False, "数据格式无效：user_configs 必须是数组。"
+            for i, config in enumerate(data["user_configs"]):
+                if not isinstance(config, dict):
+                    return False, f"数据格式无效：user_configs[{i}] 必须是对象。"
+                if "user_id" not in config:
+                    return False, f"数据格式无效：user_configs[{i}] 缺少 user_id 字段。"
+                if not isinstance(config.get("user_id"), str):
+                    return (
+                        False,
+                        f"数据格式无效：user_configs[{i}].user_id 必须是字符串。",
+                    )
+
+        # 验证 deer_records 结构
+        if "deer_records" in data:
+            if not isinstance(data["deer_records"], list):
+                return False, "数据格式无效：deer_records 必须是数组。"
+            for i, record in enumerate(data["deer_records"]):
+                if not isinstance(record, dict):
+                    return False, f"数据格式无效：deer_records[{i}] 必须是对象。"
+                required_fields = ["user_id", "year", "month", "day", "count"]
+                for field in required_fields:
+                    if field not in record:
+                        return (
+                            False,
+                            f"数据格式无效：deer_records[{i}] 缺少 {field} 字段。",
+                        )
+                # 验证数值类型和范围
+                for field in ["year", "month", "day", "count"]:
+                    value = record.get(field)
+                    if not isinstance(value, int):
+                        return (
+                            False,
+                            f"数据格式无效：deer_records[{i}].{field} 必须是整数。",
+                        )
+                    # 验证数值范围
+                    if field == "month" and not (1 <= value <= 12):
+                        return (
+                            False,
+                            f"数据格式无效：deer_records[{i}].month 必须在 1-12 之间。",
+                        )
+                    if field == "day" and not (1 <= value <= 31):
+                        return (
+                            False,
+                            f"数据格式无效：deer_records[{i}].day 必须在 1-31 之间。",
+                        )
+                    if field == "count" and value < 0:
+                        return (
+                            False,
+                            f"数据格式无效：deer_records[{i}].count 不能为负数。",
+                        )
+
         db = await self.db.get_connection()
         try:
             config_count, record_count = await self.db.import_all_data(db, data)

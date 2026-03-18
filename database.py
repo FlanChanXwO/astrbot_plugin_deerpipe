@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-import datetime
+import asyncio
 import datetime as dt
 import re
 from pathlib import Path
@@ -41,6 +41,7 @@ class DatabaseManager:
 
     负责数据库连接、初始化和所有数据操作。
     使用懒加载模式，首次连接时自动初始化表结构。
+    使用异步锁保护初始化过程，防止并发竞态。
     """
 
     def __init__(self, db_path: Path) -> None:
@@ -52,6 +53,7 @@ class DatabaseManager:
         self._db_path = db_path
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         self._initialized = False
+        self._init_lock = asyncio.Lock()
 
     async def _ensure_tables(self, db: aiosqlite.Connection) -> None:
         """确保数据库表结构已创建.
@@ -90,13 +92,17 @@ class DatabaseManager:
         """获取数据库连接.
 
         首次调用时会自动初始化表结构。
+        使用异步锁保护初始化过程，防止并发竞态。
 
         Returns:
             SQLite 数据库连接对象
         """
         db = await aiosqlite.connect(str(self._db_path))
         if not self._initialized:
-            await self._ensure_tables(db)
+            async with self._init_lock:
+                # 双重检查，防止锁竞争时重复初始化
+                if not self._initialized:
+                    await self._ensure_tables(db)
         return db
 
     async def ensure_user_config(self, db: aiosqlite.Connection, user_id: str) -> None:
@@ -192,6 +198,7 @@ class DatabaseManager:
             user_id: 用户唯一标识
             date: 日期字符串 (ISO格式)
         """
+        await self.ensure_user_config(db, user_id)
         await db.execute(
             "UPDATE deer_config SET last_retro_date = ? WHERE user_id = ?",
             (date, user_id),
@@ -267,8 +274,6 @@ class DatabaseManager:
         Returns:
             月度统计数据
         """
-        from .models import MonthStats
-
         cursor = await db.execute(
             """
             SELECT day, count FROM deer_record
@@ -339,8 +344,6 @@ class DatabaseManager:
         Returns:
             用户配置对象
         """
-        from .models import UserConfig
-
         await self.ensure_user_config(db, user_id)
         cursor = await db.execute(
             "SELECT user_id, allow_help, last_retro_date FROM deer_config WHERE user_id = ?",
@@ -397,7 +400,7 @@ class DatabaseManager:
 
         return {
             "version": _get_plugin_version(),
-            "export_time": datetime.datetime.now().isoformat(),
+            "export_time": dt.datetime.now().isoformat(),
             "user_configs": configs,
             "deer_records": records,
         }
@@ -439,6 +442,10 @@ class DatabaseManager:
         # 导入打卡记录
         if "deer_records" in data:
             for record in data["deer_records"]:
+                count = record["count"]
+                # 防止负数 count 降低既有记录
+                if count < 0:
+                    count = 0
                 await db.execute(
                     """
                     INSERT INTO deer_record (user_id, year, month, day, count)
@@ -451,8 +458,8 @@ class DatabaseManager:
                         record["year"],
                         record["month"],
                         record["day"],
-                        record["count"],
-                        record["count"],
+                        count,
+                        count,
                     ),
                 )
                 record_count += 1
