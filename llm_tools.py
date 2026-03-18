@@ -222,7 +222,9 @@ class DeerPipeLLMTools:
                 "results": results,
             }
         except Exception:
-            logger.exception(f"deer_other failed: operator_id={operator_id}, target_ids={target_ids}")
+            logger.exception(
+                f"deer_other failed: operator_id={operator_id}, target_ids={target_ids}"
+            )
             return {
                 "success": False,
                 "error": "INTERNAL_ERROR",
@@ -290,7 +292,9 @@ class DeerPipeLLMTools:
                 },
             }
         except Exception:
-            logger.exception(f"get_calendar failed: user_id={user_id}, year={year}, month={month}")
+            logger.exception(
+                f"get_calendar failed: user_id={user_id}, year={year}, month={month}"
+            )
             return {
                 "success": False,
                 "user_id": user_id,
@@ -391,7 +395,9 @@ class DeerPipeLLMTools:
                 "daily_limit": daily_limit,
             }
         except Exception:
-            logger.exception(f"retro_deer failed: user_id={user_id}, year={year}, month={month}, day={day}")
+            logger.exception(
+                f"retro_deer failed: user_id={user_id}, year={year}, month={month}, day={day}"
+            )
             return {
                 "success": False,
                 "error": "INTERNAL_ERROR",
@@ -424,7 +430,9 @@ class DeerPipeLLMTools:
                 else "已关闭，现在只有你自己能🦌了！",
             }
         except Exception:
-            logger.exception(f"set_allow_help failed: user_id={user_id}, allowed={allowed}")
+            logger.exception(
+                f"set_allow_help failed: user_id={user_id}, allowed={allowed}"
+            )
             return {
                 "success": False,
                 "error": "INTERNAL_ERROR",
