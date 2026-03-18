@@ -1,6 +1,6 @@
 name: astrbot_plugin_deerpipe
 display_name: 🦌管
-version: v1.0.0
+version: v1.0.1
 author: FlanChanXwO
 desc: 一个可爱的每日🦌插件，记录你的每一次🦌，生成精美的打卡日历。
 repo: https://github.com/FlanChanXwO/astrbot_plugin_deerpipe
