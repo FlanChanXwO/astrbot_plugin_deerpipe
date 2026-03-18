@@ -198,6 +198,7 @@ class DatabaseManager:
             user_id: 用户唯一标识
             date: 日期字符串 (ISO格式)
         """
+        await self.ensure_user_config(db, user_id)
         await db.execute(
             "UPDATE deer_config SET last_retro_date = ? WHERE user_id = ?",
             (date, user_id),
@@ -441,6 +442,10 @@ class DatabaseManager:
         # 导入打卡记录
         if "deer_records" in data:
             for record in data["deer_records"]:
+                count = record["count"]
+                # 防止负数 count 降低既有记录
+                if count < 0:
+                    count = 0
                 await db.execute(
                     """
                     INSERT INTO deer_record (user_id, year, month, day, count)
@@ -453,8 +458,8 @@ class DatabaseManager:
                         record["year"],
                         record["month"],
                         record["day"],
-                        record["count"],
-                        record["count"],
+                        count,
+                        count,
                     ),
                 )
                 record_count += 1

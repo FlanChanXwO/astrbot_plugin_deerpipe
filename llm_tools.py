@@ -176,6 +176,14 @@ class DeerPipeLLMTools:
                 "message": "当前配置禁止帮AI🦌。",
             }
 
+        # 检查目标列表是否为空
+        if not target_ids:
+            return {
+                "success": False,
+                "error": "EMPTY_TARGET_LIST",
+                "message": "未指定要帮🦌的目标用户。",
+            }
+
         today = dt.date.today()
         results = []
 
@@ -249,7 +257,7 @@ class DeerPipeLLMTools:
             days_recorded = len(month_map)
 
             # 计算连续打卡天数
-            consecutive_days = self._calculate_consecutive_days(month_map, year, month)
+            consecutive_days = self._calculate_consecutive_days(month_map)
 
             # 计算打卡频率
             max_day = dt.date(year, month, 1)
@@ -296,9 +304,7 @@ class DeerPipeLLMTools:
         finally:
             await db.close()
 
-    def _calculate_consecutive_days(
-        self, month_map: dict[int, int], year: int, month: int
-    ) -> int:
+    def _calculate_consecutive_days(self, month_map: dict[int, int]) -> int:
         """计算连续打卡天数."""
         if not month_map:
             return 0

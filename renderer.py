@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import calendar
 import hashlib
@@ -19,15 +20,20 @@ from .models import CalendarAssets, CalendarDay, CalendarPayload
 from .utils import fetch_avatar_base64
 
 # 头像缓存: OrderedDict 实现 LRU 淘汰策略
-_avatar_cache: "OrderedDict[str, tuple[float, str]]" = OrderedDict()
+_avatar_cache: OrderedDict[str, tuple[float, str]] = OrderedDict()
+# 缓存操作锁，防止并发问题
+_avatar_cache_lock = asyncio.Lock()
 # 缓存有效期 (秒)
 AVATAR_CACHE_TTL = 3600  # 1小时
 # 缓存最大条目数，防止内存无限增长
 AVATAR_CACHE_MAX_SIZE = 1024
 
 
-def _cleanup_avatar_cache(now: float | None = None) -> None:
-    """清理过期的头像缓存，并在必要时进行容量控制。"""
+async def _cleanup_avatar_cache(now: float | None = None) -> None:
+    """清理过期的头像缓存，并在必要时进行容量控制。
+
+    注意：调用此函数前必须已持有 _avatar_cache_lock，本函数内部不再获取锁。
+    """
     if now is None:
         now = time.time()
 
@@ -67,24 +73,27 @@ class CalendarRenderer:
         """
         now = time.time()
 
-        # 检查缓存是否有效
-        cached = _avatar_cache.get(user_id)
-        if cached is not None:
-            timestamp, data = cached
-            if now - timestamp < AVATAR_CACHE_TTL:
-                logger.debug(f"[DeerPipe] 头像缓存命中: {user_id}")
-                # 更新访问顺序（LRU：将最新使用的移到队尾）
-                _avatar_cache.move_to_end(user_id)
-                return data
-            # 缓存已过期，删除
-            _avatar_cache.pop(user_id, None)
+        # 检查缓存是否有效（加锁保护）
+        async with _avatar_cache_lock:
+            cached = _avatar_cache.get(user_id)
+            if cached is not None:
+                timestamp, data = cached
+                if now - timestamp < AVATAR_CACHE_TTL:
+                    logger.debug(f"[DeerPipe] 头像缓存命中: {user_id}")
+                    # 更新访问顺序（LRU：将最新使用的移到队尾）
+                    _avatar_cache.move_to_end(user_id)
+                    return data
+                # 缓存已过期，删除
+                _avatar_cache.pop(user_id, None)
 
-        # 缓存未命中或已过期，重新获取
+        # 缓存未命中或已过期，重新获取（在锁外进行网络请求）
         data = await fetch_avatar_base64(user_id)
         if data:
             # 清理过期条目并控制容量，然后添加新条目
-            _cleanup_avatar_cache(now)
-            _avatar_cache[user_id] = (now, data)
+            async with _avatar_cache_lock:
+                await _cleanup_avatar_cache(now)
+                _avatar_cache[user_id] = (now, data)
+                _avatar_cache.move_to_end(user_id)
             logger.debug(f"[DeerPipe] 头像缓存更新: {user_id}")
         return data
 
@@ -246,8 +255,10 @@ class CalendarRenderer:
             # 初阶: character_1.png ~ character_4.png
             start, end = 1, 4
 
-        # 使用user_id哈希确定性地选择索引 (使用 hashlib 保证跨进程一致性)
-        hash_input = f"{user_id}:{total_count}".encode("utf-8")
+        # 使用user_id哈希确定性地选择索引
+        # 注意：使用 hashlib.md5 仅用于非安全目的的确定性哈希（资源选择），
+        # 不涉及密码学安全场景。这样可以保证同一用户跨进程渲染结果一致。
+        hash_input = f"{user_id}:{total_count}".encode()
         hash_hex = hashlib.md5(hash_input).hexdigest()
         hash_value = int(hash_hex, 16)
         index = start + (hash_value % (end - start + 1))

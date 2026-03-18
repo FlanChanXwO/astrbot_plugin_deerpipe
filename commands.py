@@ -229,7 +229,7 @@ class DeerPipeService:
             limits_config = self.config.get("limits", {})
             daily_retro_limit = limits_config.get("daily_retro_limit", 1)
 
-            retro_count_today = await self.db.get_retro_count_today(db, user_id)
+            retro_count_today = await self.db.get_today_retro_count(db, user_id)
             if retro_count_today >= daily_retro_limit:
                 return self._get_template("deer_past_limit").format()
 
