@@ -88,12 +88,29 @@ class DataManager:
                             False,
                             f"数据格式无效：deer_records[{i}] 缺少 {field} 字段。",
                         )
-                # 验证数值类型
+                # 验证数值类型和范围
                 for field in ["year", "month", "day", "count"]:
-                    if not isinstance(record.get(field), int):
+                    value = record.get(field)
+                    if not isinstance(value, int):
                         return (
                             False,
                             f"数据格式无效：deer_records[{i}].{field} 必须是整数。",
+                        )
+                    # 验证数值范围
+                    if field == "month" and not (1 <= value <= 12):
+                        return (
+                            False,
+                            f"数据格式无效：deer_records[{i}].month 必须在 1-12 之间。",
+                        )
+                    if field == "day" and not (1 <= value <= 31):
+                        return (
+                            False,
+                            f"数据格式无效：deer_records[{i}].day 必须在 1-31 之间。",
+                        )
+                    if field == "count" and value < 0:
+                        return (
+                            False,
+                            f"数据格式无效：deer_records[{i}].count 不能为负数。",
                         )
 
         db = await self.db.get_connection()

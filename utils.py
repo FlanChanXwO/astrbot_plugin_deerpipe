@@ -82,12 +82,17 @@ async def fetch_avatar_base64(user_id: str, timeout: int = HTTP_TIMEOUT_SECONDS)
     使用全局共享的 ClientSession 以提高性能。
 
     Args:
-        user_id: QQ 用户 ID
+        user_id: QQ 用户 ID（应为纯数字）
         timeout: 请求超时时间 (秒)
 
     Returns:
         base64 data URI 字符串
     """
+    # 基础输入校验：QQ号应为纯数字
+    if not user_id or not user_id.isdigit():
+        logger.warning(f"无效的用户ID格式: {user_id}")
+        return ""
+
     avatar_url = f"https://q1.qlogo.cn/g?b=qq&nk={user_id}&s=640"
     client_timeout = aiohttp.ClientTimeout(total=timeout)
 
@@ -118,8 +123,11 @@ def extract_mention_user_ids(messages: list[At]) -> set[str]:
 def parse_allow_flag(text: str) -> bool | None:
     """解析允许/开启标志.
 
-    从文本中解析开关状态。使用正则匹配避免子串误判
-    （例如"不要开启"不应被误判为"开启"）。
+    从文本中解析开关状态。支持多种表达方式：
+    - 开/on/允许/开启/打开/启用/可以/能
+    - 关/off/禁止/关闭/关掉/禁用/不可以/不能
+
+    使用正则匹配避免子串误判（例如"不要开启"不应被误判为"开启"）。
 
     Args:
         text: 包含开关标志的文本
@@ -130,13 +138,20 @@ def parse_allow_flag(text: str) -> bool | None:
     # 将文本转换为小写并去除首尾空格
     normalized = text.strip().lower()
 
-    # 匹配 "开"、"on"、"允许" 作为独立词
-    # 使用负向前瞻/后瞻确保是独立词，适配中英文混合场景
-    if re.search(r'(^|[\s,，.;:；：])(开|on|允许)(?=[\s,，.;:；：]|$)', normalized, re.IGNORECASE):
+    # 定义边界字符（空白或标点）
+    boundary = r"(^|[\s,，.;；：:!！?？])"
+    end_boundary = r"(?=[\s,，.;；：:!！?？]|$)"
+
+    # 匹配 "开" 类表达：开、on、允许、开启、打开、启用、可以、能
+    open_patterns = r"(开|on|允许|开启|打开|启用|可以|能)"
+    if re.search(boundary + open_patterns + end_boundary, normalized, re.IGNORECASE):
         return True
-    # 匹配 "关"、"off"、"禁止" 作为独立词
-    if re.search(r'(^|[\s,，.;:；：])(关|off|禁止)(?=[\s,，.;:；：]|$)', normalized, re.IGNORECASE):
+
+    # 匹配 "关" 类表达：关、off、禁止、关闭、关掉、禁用、不可以、不能
+    close_patterns = r"(关|off|禁止|关闭|关掉|禁用|不可以|不能)"
+    if re.search(boundary + close_patterns + end_boundary, normalized, re.IGNORECASE):
         return False
+
     return None
 
 

@@ -34,6 +34,7 @@ import datetime as dt
 import json
 import os
 import tempfile
+import time
 from pathlib import Path
 
 from astrbot.api import llm_tool, logger
@@ -111,7 +112,7 @@ class DeerPipePlugin(Star):
         await close_aiohttp_session()
 
     @filter.on_llm_request()
-    async def on_llm_request(self, _: AstrMessageEvent, req: ProviderRequest):
+    async def on_llm_request(self, event: AstrMessageEvent, req: ProviderRequest):
         """在 LLM 请求时附加自定义 prompt.
 
         如果配置了 custom_prompt，则将其追加到 system_prompt 中。
@@ -181,7 +182,8 @@ class DeerPipePlugin(Star):
             JSON result with success status for each target.
         """
         user_id = event.get_sender_id()
-        result = await self.llm_tools.deer_other(user_id, target_ids)
+        bot_id = event.get_self_id()
+        result = await self.llm_tools.deer_other(user_id, target_ids, bot_id)
 
         # 如果帮打卡成功，为第一个成功的用户发送🦌历图片
         if result.get("success") and target_ids:
@@ -290,16 +292,19 @@ class DeerPipePlugin(Star):
 
         # 发送🦌历图片
         if calendar_result.get("success"):
-            target_date = dt.date(
-                year_val or dt.date.today().year, month_val or dt.date.today().month, 1
-            )
-            async for cal_result, is_text in self.service.render_calendar(
-                event, target_date, self.html_render, user_id=user_id
-            ):
-                if is_text:
-                    await event.send(event.plain_result(cal_result))
-                else:
-                    await event.send(event.image_result(cal_result))
+            try:
+                target_date = dt.date(
+                    year_val or dt.date.today().year, month_val or dt.date.today().month, 1
+                )
+                async for cal_result, is_text in self.service.render_calendar(
+                    event, target_date, self.html_render, user_id=user_id
+                ):
+                    if is_text:
+                        await event.send(event.plain_result(cal_result))
+                    else:
+                        await event.send(event.image_result(cal_result))
+            except ValueError as exc:
+                logger.warning(f"Invalid date parameters: year={year}, month={month}, exc={exc}")
 
         return json.dumps(result, ensure_ascii=False)
 
@@ -348,7 +353,7 @@ class DeerPipePlugin(Star):
         yield event.plain_result(result)
 
     @filter.command_group("设置被鹿", alias={"设置被撸", "设置被撸🦌"})
-    def set_deer_group(self) -> None:
+    async def set_deer_group(self, event: AstrMessageEvent) -> None:
         """管理员设置他人的帮deer权限"""
 
     @filter.permission_type(filter.PermissionType.ADMIN)
@@ -469,13 +474,13 @@ class DeerPipePlugin(Star):
     # Data export/import commands (管理员命令，不是LLM工具)
     # ==================================================================
     @filter.command_group("管理鹿管数据")
-    def deer_data_group(self) -> None:
+    async def deer_data_group(self, event: AstrMessageEvent) -> None:
         """鹿管数据管理（导入/导出）"""
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @deer_data_group.command("导出", alias={"export"})
     async def export_data_cmd(self, event: AstrMessageEvent):
-        """导出所有数据 (/鹿管数据 导出)."""
+        """导出所有数据 (/管理鹿管数据 导出)."""
         success, msg, data = await self.data_manager.export_data()
         if not success:
             yield event.plain_result(msg)
@@ -513,13 +518,19 @@ class DeerPipePlugin(Star):
             logger.error(f"导出文件发送失败: {e}")
             yield event.plain_result(f"{msg}\n文件发送失败: {e}")
 
+    # 文件导入相关状态
+    _import_session_timeout = 300  # 5分钟超时
+
     @filter.permission_type(filter.PermissionType.ADMIN)
     @deer_data_group.command("导入", alias={"import"})
     async def import_data_cmd(self, event: AstrMessageEvent):
-        """导入数据 (/鹿管数据 导入)."""
+        """导入数据 (/管理鹿管数据 导入)."""
+        # 记录导入会话开始时间
+        self._last_import_request_time = time.time()
         yield event.plain_result(
             "请发送 JSON 格式的数据文件（通常是 .json 文件），或在回复此消息时附上文件。\n"
-            "注意：导入将合并现有数据，相同日期的记录会累加次数。"
+            "注意：导入将合并现有数据，相同日期的记录会累加次数。\n"
+            "请在5分钟内发送文件，超时请重新执行导入命令。"
         )
 
     @filter.event_message_type(filter.EventMessageType.ALL)
@@ -527,10 +538,17 @@ class DeerPipePlugin(Star):
         """监听文件消息以处理导入.
 
         当管理员发送文件时，自动尝试解析并导入数据。
-        只要是有效的 JSON 格式且包含 deer_records 或 user_configs 的数据即可导入。
+        需要是在导入命令后5分钟内发送的文件才会处理。
+        文件大小限制：10MB
         """
         # 检查是否是管理员（内部检查，避免每条消息都触发权限提示）
         if not event.is_admin():
+            return
+
+        # 检查是否在导入会话有效期内
+        now = time.time()
+        last_request = getattr(self, "_last_import_request_time", 0)
+        if now - last_request > self._import_session_timeout:
             return
 
         # 检查消息中是否有文件
@@ -551,6 +569,18 @@ class DeerPipePlugin(Star):
                     file_path = await comp.get_file()
                     if not file_path:
                         continue
+
+                    # 检查文件大小（限制10MB）
+                    try:
+                        file_size = os.path.getsize(file_path)
+                        max_size = 10 * 1024 * 1024  # 10MB
+                        if file_size > max_size:
+                            yield event.plain_result(
+                                f"文件过大 ({file_size / 1024 / 1024:.2f}MB > 10MB)，请压缩或分批导入。"
+                            )
+                            return
+                    except OSError:
+                        pass  # 如果无法获取大小，继续尝试处理
 
                     # 读取文件内容
                     with open(file_path, encoding="utf-8") as f:
@@ -591,7 +621,7 @@ class DeerPipePlugin(Star):
 
                 except OSError as e:
                     logger.error(f"导入文件处理失败: {e}")
-                    # 不在这里提示，避免干扰正常文件消息
+                    yield event.plain_result(f"文件处理失败: {e}")
 
     async def handle_import_file(self, file_content: str) -> str:
         """处理导入文件内容.
