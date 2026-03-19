@@ -333,6 +333,7 @@ class DatabaseManager:
 
         # 安全说明：这里只拼接 "?" 占位符字符串，用户输入通过 params 参数化传递
         # 不直接拼接用户输入，因此不存在 SQL 注入风险
+        # nosec B608: 仅拼接 "?" 占位符，用户数据通过 params 参数化
         placeholders = ",".join(["?" for _ in user_ids])
         query = (
             "SELECT user_id, day, count FROM deer_record "
@@ -340,7 +341,7 @@ class DatabaseManager:
         )
         params = list(user_ids) + [year, month]
 
-        cursor = await db.execute(query, params)
+        cursor = await db.execute(query, params)  # nosec B608
         result: dict[str, dict[int, int]] = {user_id: {} for user_id in user_ids}
         async for row in cursor:
             user_id, day, count = row
