@@ -314,7 +314,37 @@ class DatabaseManager:
             result[row[0]] = row[1]
         return result
 
-    async def has_record_today(self, db: aiosqlite.Connection, user_id: str) -> bool:
+    async def get_calendar_data_batch(
+        self, db: aiosqlite.Connection, user_ids: list[str], year: int, month: int
+    ) -> dict[str, dict[int, int]]:
+        """批量获取多个用户的日历展示所需数据.
+
+        Args:
+            db: 数据库连接对象
+            user_ids: 用户唯一标识列表
+            year: 年份
+            month: 月份
+
+        Returns:
+            用户ID到日期打卡次数映射的字典
+        """
+        if not user_ids:
+            return {}
+
+        # 构建 IN 子句的占位符
+        placeholders = ",".join("?" * len(user_ids))
+        query = f"""
+            SELECT user_id, day, count FROM deer_record
+            WHERE user_id IN ({placeholders}) AND year = ? AND month = ?
+        """
+        params = list(user_ids) + [year, month]
+
+        cursor = await db.execute(query, params)
+        result: dict[str, dict[int, int]] = {user_id: {} for user_id in user_ids}
+        async for row in cursor:
+            user_id, day, count = row
+            result[user_id][day] = count
+        return result
         """检查用户今天是否已有打卡记录.
 
         Args:

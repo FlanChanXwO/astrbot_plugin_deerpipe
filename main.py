@@ -184,15 +184,9 @@ class DeerPipePlugin(Star):
 
         # 如果帮打卡成功，为第一个成功的用户发送🦌历图片
         # 如果操作者在目标列表中，优先显示操作者的日历
-        if result.get("success"):
+        if result.get("success") and target_ids:
             # 优先选择操作者自己的日历（如果操作者在目标列表中）
-            display_user_id = (
-                user_id
-                if user_id in target_ids
-                else target_ids[0]
-                if target_ids
-                else None
-            )
+            display_user_id = user_id if user_id in target_ids else target_ids[0]
             if display_user_id:
                 async for cal_result, is_text in self.service.render_calendar(
                     event, dt.date.today(), self.html_render, user_id=display_user_id
@@ -300,9 +294,7 @@ class DeerPipePlugin(Star):
         if calendar_result.get("success"):
             try:
                 target_date = dt.date(
-                    year_val or dt.date.today().year,
-                    month_val or dt.date.today().month,
-                    1,
+                    year_val or dt.date.today().year, month_val or dt.date.today().month, 1
                 )
                 async for cal_result, is_text in self.service.render_calendar(
                     event, target_date, self.html_render, user_id=user_id
