@@ -220,8 +220,12 @@ class DeerPipeLLMTools:
             for target_id in target_ids:
                 # 检查该用户是否成功打卡
                 success_result = next(
-                    (r for r in results if r["target_id"] == target_id and r["success"]),
-                    None
+                    (
+                        r
+                        for r in results
+                        if r["target_id"] == target_id and r["success"]
+                    ),
+                    None,
                 )
                 if success_result:
                     month_map = await self.db.get_calendar_data(
