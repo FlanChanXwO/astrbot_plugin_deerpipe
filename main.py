@@ -294,7 +294,9 @@ class DeerPipePlugin(Star):
         if calendar_result.get("success"):
             try:
                 target_date = dt.date(
-                    year_val or dt.date.today().year, month_val or dt.date.today().month, 1
+                    year_val or dt.date.today().year,
+                    month_val or dt.date.today().month,
+                    1,
                 )
                 async for cal_result, is_text in self.service.render_calendar(
                     event, target_date, self.html_render, user_id=user_id

@@ -216,9 +216,7 @@ class DeerPipeLLMTools:
             await db.commit()
 
             # 批量获取所有成功用户的日历数据（避免N+1查询）
-            successful_user_ids = [
-                r["target_id"] for r in results if r["success"]
-            ]
+            successful_user_ids = [r["target_id"] for r in results if r["success"]]
             calendar_data_map = await self.db.get_calendar_data_batch(
                 db, successful_user_ids, today.year, today.month
             )
