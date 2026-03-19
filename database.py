@@ -347,6 +347,10 @@ class DatabaseManager:
             user_id, day, count = row
             result[user_id][day] = count
         return result
+
+    async def has_record_today(
+        self, db: aiosqlite.Connection, user_id: str
+    ) -> bool:
         """检查用户今天是否已有打卡记录.
 
         Args:
