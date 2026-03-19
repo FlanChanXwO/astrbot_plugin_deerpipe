@@ -2,7 +2,7 @@
 
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/FlanChanXwO/astrbot_plugin_deerpipe/master/logo.png" width="400" alt="Setu 插件"/>
+<img src="https://raw.githubusercontent.com/FlanChanXwO/astrbot_plugin_deerpipe/master/logo.png" width="400" alt="🦌管插件"/>
 
 <br/>
 
@@ -84,6 +84,7 @@
 |--------|------|------|--------|
 | `ai_behavior.allow_ai_help_deer` | 布尔值 | 是否允许 AI 帮用户打卡 | `true` |
 | `ai_behavior.allow_ai_be_deered` | 布尔值 | 是否允许用户帮 AI 打卡 | `false` |
+| `ai_behavior.allow_ai_help_self` | 布尔值 | 是否允许 AI 帮用户自己打卡 | `true` |
 | `ai_behavior.custom_prompt` | 字符串 | 自定义 LLM Prompt，影响 AI 对🦌行为的认知和回复风格 | `""` |
 
 ### 限制配置 (`limits`)

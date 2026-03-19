@@ -183,15 +183,18 @@ class DeerPipePlugin(Star):
         result = await self.llm_tools.deer_other(user_id, target_ids, bot_id)
 
         # 如果帮打卡成功，为第一个成功的用户发送🦌历图片
-        if result.get("success") and target_ids:
-            target_id = target_ids[0]
-            async for cal_result, is_text in self.service.render_calendar(
-                event, dt.date.today(), self.html_render, user_id=target_id
-            ):
-                if is_text:
-                    await event.send(event.plain_result(cal_result))
-                else:
-                    await event.send(event.image_result(cal_result))
+        # 如果操作者在目标列表中，优先显示操作者的日历
+        if result.get("success"):
+            # 优先选择操作者自己的日历（如果操作者在目标列表中）
+            display_user_id = user_id if user_id in target_ids else target_ids[0] if target_ids else None
+            if display_user_id:
+                async for cal_result, is_text in self.service.render_calendar(
+                    event, dt.date.today(), self.html_render, user_id=display_user_id
+                ):
+                    if is_text:
+                        await event.send(event.plain_result(cal_result))
+                    else:
+                        await event.send(event.image_result(cal_result))
 
         return json.dumps(result, ensure_ascii=False)
 

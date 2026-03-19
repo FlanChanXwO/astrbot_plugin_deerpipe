@@ -215,11 +215,31 @@ class DeerPipeLLMTools:
                 )
             await db.commit()
 
+            # 为每个成功的目标用户获取日历数据
+            calendar_data = {}
+            for target_id in target_ids:
+                # 检查该用户是否成功打卡
+                success_result = next(
+                    (r for r in results if r["target_id"] == target_id and r["success"]),
+                    None
+                )
+                if success_result:
+                    month_map = await self.db.get_calendar_data(
+                        db, target_id, today.year, today.month
+                    )
+                    calendar_data[target_id] = {
+                        "calendar": month_map,
+                        "total_count": sum(month_map.values()),
+                        "days_recorded": len(month_map),
+                        "today_count": month_map.get(today.day, 0),
+                    }
+
             return {
                 "success": True,
                 "operator_id": operator_id,
                 "date": today.isoformat(),
                 "results": results,
+                "calendar_data": calendar_data,
             }
         except Exception:
             logger.exception(
