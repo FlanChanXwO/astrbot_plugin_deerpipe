@@ -331,12 +331,13 @@ class DatabaseManager:
         if not user_ids:
             return {}
 
-        # 构建 IN 子句的占位符
-        placeholders = ",".join("?" * len(user_ids))
-        query = f"""
-            SELECT user_id, day, count FROM deer_record
-            WHERE user_id IN ({placeholders}) AND year = ? AND month = ?
-        """
+        # 安全说明：这里只拼接 "?" 占位符字符串，用户输入通过 params 参数化传递
+        # 不直接拼接用户输入，因此不存在 SQL 注入风险
+        placeholders = ",".join(["?" for _ in user_ids])
+        query = (
+            "SELECT user_id, day, count FROM deer_record "
+            "WHERE user_id IN (" + placeholders + ") AND year = ? AND month = ?"
+        )
         params = list(user_ids) + [year, month]
 
         cursor = await db.execute(query, params)
