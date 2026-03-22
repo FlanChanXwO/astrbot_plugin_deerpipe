@@ -10,11 +10,12 @@ import datetime as dt
 
 from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent
+from astrbot.core.message.components import At
 from astrbot.core.platform.message_type import MessageType
 
 from .database import DatabaseManager
 from .renderer import CalendarRenderer
-from .utils import validate_day
+from .utils import extract_mention_user_ids, validate_day
 
 
 class DeerPipeService:
