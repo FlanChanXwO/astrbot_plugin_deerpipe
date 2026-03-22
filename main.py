@@ -329,9 +329,8 @@ class DeerPipePlugin(Star):
         # 检查是否有 @ 用户
         messages = event.message_obj.message
         at_list = [m for m in messages if isinstance(m, At)]
-        at_ids = extract_mention_user_ids(at_list)
 
-        if at_ids:
+        if extract_mention_user_ids(at_list):
             # 帮他人打卡模式
             result = await self.service.handle_deer_other(event)
             if result is None:
