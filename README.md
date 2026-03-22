@@ -1,14 +1,14 @@
-# 🦌 鹿管
+# 🦌 鹿乃子月历
 
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/FlanChanXwO/astrbot_plugin_deerpipe/master/logo.png" width="400" alt="🦌管插件"/>
+<img src="https://raw.githubusercontent.com/FlanChanXwO/astrbot_plugin_deerpipe/master/logo.png" width="400" alt="鹿乃子月历"/>
 
 <br/>
 
 <img src="https://count.getloli.com/@astrbot_plugin_deerpipe?name=astrbot_plugin_deerpipe&theme=rule34&padding=7&offset=0&align=top&scale=1&pixelated=1&darkmode=auto" alt="Moe Counter">
 
-**一个可爱的每日🦌插件，记录你的每一次🦌，生成精美的打卡日历。**
+**一款可爱的每日打卡插件，记录你的健康生活每一天，生成精美的月度打卡日历。**
 
 [![License: AGPL](https://img.shields.io/badge/License-AGPL-blue.svg)](https://opensource.org/licenses/agpl-3.0)
 ![Python Version](https://img.shields.io/badge/Python-3.10%2B-blue)
@@ -30,12 +30,12 @@
       <td align="center">
         <img src="https://raw.githubusercontent.com/FlanChanXwO/astrbot_plugin_deerpipe/master/assets/img_1.png" width="400" alt="日历预览"/>
         <br/>
-        <sub>🦌历</sub>
+        <sub>打卡日历</sub>
       </td>
       <td align="center">
         <img src="https://raw.githubusercontent.com/FlanChanXwO/astrbot_plugin_deerpipe/master/assets/img_2.png" width="400" alt="批量报告预览"/>
         <br/>
-        <sub>批量帮🦌报告</sub>
+        <sub>批量打卡报告</sub>
       </td>
     </tr>
   </table>
@@ -46,7 +46,7 @@
 ## ✨ 功能特性
 
 - 📅 **精美日历** - 可视化展示每月打卡记录，支持自定义样式
-- 🤝 **帮他人打卡** - 支持帮好友打卡，批量操作一键完成
+- 🤝 **好友互助** - 支持帮好友打卡，批量操作一键完成
 - 🎨 **批量报告** - 多人打卡时生成精美的批量结算报告
 - 🔄 **补卡功能** - 支持补录遗漏的打卡记录
 - 📊 **数据统计** - 自动统计打卡次数、连续天数等数据
@@ -60,7 +60,7 @@
 
 ### 方式一：通过 AstrBot 插件市场安装（推荐）
 
-在 AstrBot 管理面板中搜索 `astrbot_plugin_deerpipe` 并安装。
+在 AstrBot 管理面板中搜索 `鹿乃子月历` 并安装。
 
 ### 方式二：手动安装
 
@@ -76,7 +76,7 @@
 
 ## 🛠️ 配置项
 
-在 AstrBot 管理面板的「配置」页面，找到 `astrbot_plugin_deerpipe` 插件配置：
+在 AstrBot 管理面板的「配置」页面，找到 `鹿乃子月历` 插件配置：
 
 ### AI 行为配置 (`ai_behavior`)
 
@@ -85,7 +85,7 @@
 | `ai_behavior.allow_ai_help_deer` | 布尔值 | 是否允许 AI 帮用户打卡 | `true` |
 | `ai_behavior.allow_ai_be_deered` | 布尔值 | 是否允许用户帮 AI 打卡 | `false` |
 | `ai_behavior.allow_ai_help_self` | 布尔值 | 是否允许 AI 帮用户自己打卡 | `true` |
-| `ai_behavior.custom_prompt` | 字符串 | 自定义 LLM Prompt，影响 AI 对🦌行为的认知和回复风格 | `""` |
+| `ai_behavior.custom_prompt` | 字符串 | 自定义 LLM Prompt，影响 AI 对打卡行为的认知和回复风格 | `""` |
 
 ### 限制配置 (`limits`)
 
@@ -137,7 +137,7 @@
 帮🦌 @用户    # 帮他人打卡
 ```
 
-### 批量帮🦌
+### 批量打卡
 
 同时 @ 多个用户，即可生成批量打卡报告：
 
