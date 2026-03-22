@@ -50,6 +50,7 @@ from .data_manager import DataManager
 from .database import DatabaseManager
 from .llm_tools import DeerPipeLLMTools
 from .renderer import CalendarRenderer
+from .utils import extract_mention_user_ids
 
 
 class DeerPipePlugin(Star):
@@ -324,15 +325,14 @@ class DeerPipePlugin(Star):
                  /deer @someone or /🦌 @用户 (帮他人打卡)
         Returns: 打卡成功消息 + 本月🦌历图片（合并为同一条消息）
         """
-        from .utils import extract_mention_user_ids
-
         # 检查是否有 @ 用户
         messages = event.message_obj.message
         at_list = [m for m in messages if isinstance(m, At)]
+        at_ids = extract_mention_user_ids(at_list)
 
-        if extract_mention_user_ids(at_list):
+        if at_ids:
             # 帮他人打卡模式
-            result = await self.service.handle_deer_other(event)
+            result = await self.service.handle_deer_other(event, at_ids)
             if result is None:
                 result = "请 @ 要帮🦌的用户。"
             yield event.plain_result(result)

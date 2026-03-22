@@ -10,12 +10,11 @@ import datetime as dt
 
 from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent
-from astrbot.core.message.components import At
 from astrbot.core.platform.message_type import MessageType
 
 from .database import DatabaseManager
 from .renderer import CalendarRenderer
-from .utils import extract_mention_user_ids, validate_day
+from .utils import validate_day
 
 
 class DeerPipeService:
@@ -88,11 +87,14 @@ class DeerPipeService:
 
         return "成功🦌了"
 
-    async def handle_deer_other(self, event: AstrMessageEvent) -> str | None:
+    async def handle_deer_other(
+        self, event: AstrMessageEvent, at_ids: set[str]
+    ) -> str | None:
         """处理帮他人打卡.
 
         Args:
             event: 消息事件
+            at_ids: 要帮打卡的用户ID集合
 
         Returns:
             操作结果消息，None 表示不处理
@@ -100,10 +102,6 @@ class DeerPipeService:
         if event.get_message_type() != MessageType.GROUP_MESSAGE:
             return "该命令仅限群聊使用。"
 
-        # 从消息中提取 @ 列表
-        messages = event.message_obj.message
-        at_list = [m for m in messages if isinstance(m, At)]
-        at_ids = extract_mention_user_ids(at_list)
         if not at_ids:
             return None
 
