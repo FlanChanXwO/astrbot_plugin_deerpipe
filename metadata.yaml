@@ -1,6 +1,15 @@
 name: astrbot_plugin_deerpipe
-display_name: 🦌管
-version: v1.0.2
+display_name: 鹿乃子月历
+version: v1.0.3
 author: FlanChanXwO
-desc: 一个可爱的每日🦌插件，记录你的每一次🦌，生成精美的打卡日历。
+desc: 一款可爱的每日打卡插件，记录你的健康生活每一天，生成精美的月度打卡日历，支持补签和好友互动。
 repo: https://github.com/FlanChanXwO/astrbot_plugin_deerpipe
+tags:
+  - 打卡
+  - 日历
+  - 健康管理
+  - 签到
+  - 记录
+  - 月度统计
+  - 好友互动
+  - 生活助手
