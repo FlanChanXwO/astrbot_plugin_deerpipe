@@ -717,7 +717,9 @@ class DeerPipePlugin(Star):
                 yield event.plain_result("不可以帮 Bot🦌哦~")
                 return
 
-            logger.debug(f"[DeerPipe] plain_deer_merged_cmd 处理 at_ids: {at_ids}, 类型: {type(list(at_ids)[0])}")
+            logger.debug(
+                f"[DeerPipe] plain_deer_merged_cmd 处理 at_ids: {at_ids}, 类型: {type(list(at_ids)[0])}"
+            )
 
             # 处理帮他人打卡
             today = dt.date.today()
@@ -737,7 +739,9 @@ class DeerPipePlugin(Star):
                     )
                     # 调试日志：检查权限
                     allowed = await self.db.is_help_allowed(db, target_id)
-                    logger.debug(f"[DeerPipe] 检查用户 {target_id} 的权限: allowed={allowed}, type={type(allowed)}, not_allowed={not allowed}")
+                    logger.debug(
+                        f"[DeerPipe] 检查用户 {target_id} 的权限: allowed={allowed}, type={type(allowed)}, not_allowed={not allowed}"
+                    )
                     if not allowed:
                         logger.debug(f"[DeerPipe] 用户 {target_id} 被拒绝，跳过打卡")
                         results.append(
@@ -791,7 +795,9 @@ class DeerPipePlugin(Star):
                 target_id = at_ids_list[0]
                 # 从 results 获取已解析的昵称
                 target_name = results[0]["nickname"] if results else target_id
-                result_data = results[0] if results else {"success": False, "reason": "未知错误"}
+                result_data = (
+                    results[0] if results else {"success": False, "reason": "未知错误"}
+                )
 
                 if not result_data["success"]:
                     # 🦌失败，提示命令发起者原因
