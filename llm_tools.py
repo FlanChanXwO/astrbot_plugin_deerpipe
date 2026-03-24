@@ -50,8 +50,10 @@ class DeerPipeLLMTools:
         Returns:
             True表示允许
         """
-        ai_config = self.config.get("ai_behavior", {})
-        return ai_config.get("allow_ai_help_deer", True)
+        ai_config = self.config.get("ai_behavior")
+        if not isinstance(ai_config, dict):
+            return True  # 默认允许
+        return bool(ai_config.get("allow_ai_help_deer", True))
 
     def _is_ai_be_deered_allowed(self) -> bool:
         """检查是否允许AI被🦌.
@@ -59,8 +61,10 @@ class DeerPipeLLMTools:
         Returns:
             True表示允许
         """
-        ai_config = self.config.get("ai_behavior", {})
-        return ai_config.get("allow_ai_be_deered", False)
+        ai_config = self.config.get("ai_behavior")
+        if not isinstance(ai_config, dict):
+            return False  # 默认不允许
+        return bool(ai_config.get("allow_ai_be_deered", False))
 
     def _get_daily_retro_limit(self) -> int:
         """获取每日补🦌次数限制.
@@ -68,9 +72,11 @@ class DeerPipeLLMTools:
         Returns:
             每日补🦌次数限制，0表示禁止，最大31
         """
-        limits_config = self.config.get("limits", {})
+        limits_config = self.config.get("limits")
+        if not isinstance(limits_config, dict):
+            return 1  # 默认限制1次
         limit = limits_config.get("daily_retro_limit", 1)
-        # 防御性校验：负数视为0（禁止），过大值限制为31
+        # 防御性校验：非整数视为1，负数视为0（禁止），过大值限制为31
         if not isinstance(limit, int):
             return 1
         if limit < 0:
@@ -78,6 +84,17 @@ class DeerPipeLLMTools:
         if limit > 31:
             return 31
         return limit
+
+    def _is_ai_help_self_allowed(self) -> bool:
+        """检查是否允许AI帮发消息的用户自己打卡.
+
+        Returns:
+            True表示允许
+        """
+        ai_config = self.config.get("ai_behavior")
+        if not isinstance(ai_config, dict):
+            return True  # 默认允许
+        return bool(ai_config.get("allow_ai_help_self", True))
 
     async def deer_self(self, user_id: str) -> dict[str, Any]:
         """用户自我打卡.
@@ -155,8 +172,16 @@ class DeerPipeLLMTools:
             打卡结果数据
         """
         operator_id = normalize_user_id(operator_id)
-        # 确保 target_ids 中的所有 ID 都是字符串
-        target_ids = [normalize_user_id(tid) for tid in target_ids]
+        # 确保 target_ids 中的所有 ID 都是字符串并去重
+        seen = set()
+        unique_target_ids = []
+        for tid in target_ids:
+            normalized_id = normalize_user_id(tid)
+            if normalized_id not in seen:
+                seen.add(normalized_id)
+                unique_target_ids.append(normalized_id)
+        target_ids = unique_target_ids
+
         # 检查是否允许AI帮用户🦌
         if not self._is_ai_help_deer_allowed():
             return {
@@ -376,15 +401,46 @@ class DeerPipeLLMTools:
         year = year or today.year
         month = month or today.month
 
-        # 验证日期
-        if day < 1 or day > calendar.monthrange(year, month)[1]:
+        # 验证 year/month 合法性
+        if not isinstance(year, int) or not isinstance(month, int):
             return {
                 "success": False,
-                "error": f"日期无效，本月范围为 1-{calendar.monthrange(year, month)[1]}",
+                "error": "INVALID_DATE",
+                "message": "年份和月份必须是整数。",
+            }
+        if month < 1 or month > 12:
+            return {
+                "success": False,
+                "error": "INVALID_MONTH",
+                "message": "月份必须在 1-12 之间。",
+            }
+
+        # 验证日期
+        try:
+            max_day = calendar.monthrange(year, month)[1]
+        except ValueError as e:
+            return {
+                "success": False,
+                "error": "INVALID_DATE",
+                "message": f"无效的日期参数: {e}",
+            }
+
+        if day < 1 or day > max_day:
+            return {
+                "success": False,
+                "error": f"日期无效，本月范围为 1-{max_day}",
             }
 
         # 检查不能对未来日期补签
-        target_date = dt.date(year, month, day)
+        try:
+            target_date = dt.date(year, month, day)
+        except ValueError as e:
+            return {
+                "success": False,
+                "error": "INVALID_DATE",
+                "message": f"无效的日期: {e}",
+            }
+
         if target_date > today:
             return {
                 "success": False,

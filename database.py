@@ -103,7 +103,12 @@ class DatabaseManager:
             async with self._init_lock:
                 # 双重检查，防止锁竞争时重复初始化
                 if not self._initialized:
-                    await self._ensure_tables(db)
+                    try:
+                        await self._ensure_tables(db)
+                    except Exception:
+                        # 初始化失败时关闭连接，防止泄漏
+                        await db.close()
+                        raise
         return db
 
     @staticmethod
