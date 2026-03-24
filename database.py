@@ -13,6 +13,7 @@ from pathlib import Path
 import aiosqlite
 
 from .models import MonthStats, UserConfig
+from .utils import normalize_user_id
 
 
 def _get_plugin_version() -> str:
@@ -105,18 +106,21 @@ class DatabaseManager:
                     await self._ensure_tables(db)
         return db
 
-    async def ensure_user_config(self, db: aiosqlite.Connection, user_id: str) -> None:
+    @staticmethod
+    async def ensure_user_config(db: aiosqlite.Connection, user_id: str) -> None:
         """确保用户配置记录存在.
 
         Args:
             db: 数据库连接对象
             user_id: 用户唯一标识
         """
+        user_id = normalize_user_id(user_id)
         await db.execute(
             "INSERT OR IGNORE INTO deer_config (user_id) VALUES (?)", (user_id,)
         )
 
-    async def is_help_allowed(self, db: aiosqlite.Connection, user_id: str) -> bool:
+    @staticmethod
+    async def is_help_allowed(db: aiosqlite.Connection, user_id: str) -> bool:
         """检查用户是否允许被帮 deer.
 
         Args:
@@ -124,14 +128,24 @@ class DatabaseManager:
             user_id: 用户唯一标识
 
         Returns:
-            是否允许被帮 deer
+            是否允许被帮 deer（默认允许）
         """
-        await self.ensure_user_config(db, user_id)
+        # 确保 user_id 是字符串
+        user_id = normalize_user_id(user_id)
         cursor = await db.execute(
             "SELECT allow_help FROM deer_config WHERE user_id = ?", (user_id,)
         )
         row = await cursor.fetchone()
-        return bool(row and row[0])
+        # 如果没有记录，默认允许被帮（返回True）
+        if row is None:
+            return True
+        # 确保转换为整数再转布尔值，防止SQLite返回字符串
+        value = row[0]
+        if value is None:
+            return True
+        if isinstance(value, str):
+            value = int(value)
+        return bool(value)
 
     async def set_help_allowed(
         self, db: aiosqlite.Connection, user_id: str, allowed: bool
@@ -143,14 +157,16 @@ class DatabaseManager:
             user_id: 用户唯一标识
             allowed: 是否允许
         """
+        user_id = normalize_user_id(user_id)
         await self.ensure_user_config(db, user_id)
         await db.execute(
             "UPDATE deer_config SET allow_help = ? WHERE user_id = ?",
             (1 if allowed else 0, user_id),
         )
 
+    @staticmethod
     async def record_attendance(
-        self, db: aiosqlite.Connection, user_id: str, year: int, month: int, day: int
+        db: aiosqlite.Connection, user_id: str, year: int, month: int, day: int
     ) -> None:
         """记录用户打卡.
 
@@ -161,6 +177,7 @@ class DatabaseManager:
             month: 月份
             day: 日期
         """
+        user_id = normalize_user_id(user_id)
         await db.execute(
             """
             INSERT INTO deer_record (user_id, year, month, day, count)
@@ -181,6 +198,7 @@ class DatabaseManager:
         Returns:
             上次补 deer 日期 (ISO格式字符串，空字符串表示从未补过)
         """
+        user_id = normalize_user_id(user_id)
         await self.ensure_user_config(db, user_id)
         cursor = await db.execute(
             "SELECT last_retro_date FROM deer_config WHERE user_id = ?", (user_id,)
@@ -198,6 +216,7 @@ class DatabaseManager:
             user_id: 用户唯一标识
             date: 日期字符串 (ISO格式)
         """
+        user_id = normalize_user_id(user_id)
         await self.ensure_user_config(db, user_id)
         await db.execute(
             "UPDATE deer_config SET last_retro_date = ? WHERE user_id = ?",
@@ -216,6 +235,7 @@ class DatabaseManager:
         Returns:
             今日补 deer 次数
         """
+        user_id = normalize_user_id(user_id)
         await self.ensure_user_config(db, user_id)
         # 检查是否是新的一天
         last_retro_date = await self.get_last_retro_date(db, user_id)
@@ -241,6 +261,7 @@ class DatabaseManager:
             user_id: 用户唯一标识
             date: 日期字符串 (ISO格式)
         """
+        user_id = normalize_user_id(user_id)
         last_retro_date = await self.get_last_retro_date(db, user_id)
 
         if last_retro_date == date:
@@ -274,6 +295,7 @@ class DatabaseManager:
         Returns:
             月度统计数据
         """
+        user_id = normalize_user_id(user_id)
         cursor = await db.execute(
             """
             SELECT day, count FROM deer_record
@@ -291,8 +313,9 @@ class DatabaseManager:
 
         return MonthStats(year=year, month=month, total_count=total, days=days)
 
+    @staticmethod
     async def get_calendar_data(
-        self, db: aiosqlite.Connection, user_id: str, year: int, month: int
+        db: aiosqlite.Connection, user_id: str, year: int, month: int
     ) -> dict[int, int]:
         """获取日历展示所需数据.
 
@@ -305,6 +328,7 @@ class DatabaseManager:
         Returns:
             日期到打卡次数的映射字典
         """
+        user_id = normalize_user_id(user_id)
         cursor = await db.execute(
             "SELECT day, count FROM deer_record WHERE user_id = ? AND year = ? AND month = ?",
             (user_id, year, month),
@@ -314,8 +338,9 @@ class DatabaseManager:
             result[row[0]] = row[1]
         return result
 
+    @staticmethod
     async def get_calendar_data_batch(
-        self, db: aiosqlite.Connection, user_ids: list[str], year: int, month: int
+        db: aiosqlite.Connection, user_ids: list[str], year: int, month: int
     ) -> dict[str, dict[int, int]]:
         """批量获取多个用户的日历展示所需数据.
 
@@ -328,6 +353,8 @@ class DatabaseManager:
         Returns:
             用户ID到日期打卡次数映射的字典
         """
+        # 确保所有 user_id 都是字符串
+        user_ids = [normalize_user_id(uid) for uid in user_ids]
         if not user_ids:
             return {}
 
@@ -348,7 +375,8 @@ class DatabaseManager:
             result[user_id][day] = count
         return result
 
-    async def has_record_today(self, db: aiosqlite.Connection, user_id: str) -> bool:
+    @staticmethod
+    async def has_record_today(db: aiosqlite.Connection, user_id: str) -> bool:
         """检查用户今天是否已有打卡记录.
 
         Args:
@@ -358,6 +386,7 @@ class DatabaseManager:
         Returns:
             今天是否有打卡记录
         """
+        user_id = normalize_user_id(user_id)
         today = dt.date.today()
         cursor = await db.execute(
             "SELECT 1 FROM deer_record WHERE user_id = ? AND year = ? AND month = ? AND day = ?",
@@ -378,6 +407,7 @@ class DatabaseManager:
         Returns:
             用户配置对象
         """
+        user_id = normalize_user_id(user_id)
         await self.ensure_user_config(db, user_id)
         cursor = await db.execute(
             "SELECT user_id, allow_help, last_retro_date FROM deer_config WHERE user_id = ?",
@@ -439,9 +469,8 @@ class DatabaseManager:
             "deer_records": records,
         }
 
-    async def import_all_data(
-        self, db: aiosqlite.Connection, data: dict
-    ) -> tuple[int, int]:
+    @staticmethod
+    async def import_all_data(db: aiosqlite.Connection, data: dict) -> tuple[int, int]:
         """导入数据.
 
         Args:

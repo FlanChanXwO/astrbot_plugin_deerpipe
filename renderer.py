@@ -125,8 +125,9 @@ class CalendarRenderer:
         image_path = self.images_dir / image_name
         return image_to_data_uri(image_path)
 
+    @staticmethod
     def _build_calendar_data(
-        self, month_map: dict[int, int], year: int, month: int
+        month_map: dict[int, int], year: int, month: int
     ) -> list[list[CalendarDay]]:
         """构建日历数据结构.
 
@@ -410,9 +411,8 @@ class CalendarRenderer:
 
         return image_url
 
-    def format_fallback_text(
-        self, year: int, month: int, month_map: dict[int, int]
-    ) -> str:
+    @staticmethod
+    def format_fallback_text(year: int, month: int, month_map: dict[int, int]) -> str:
         """生成渲染失败时的纯文本日历.
 
         Args:

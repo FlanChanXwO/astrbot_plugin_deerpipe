@@ -15,6 +15,7 @@ from astrbot.api import logger
 from .commands import DeerPipeService
 from .data_manager import DataManager
 from .database import DatabaseManager
+from .utils import normalize_user_id
 
 
 class DeerPipeLLMTools:
@@ -87,6 +88,7 @@ class DeerPipeLLMTools:
         Returns:
             打卡结果数据
         """
+        user_id = normalize_user_id(user_id)
         today = dt.date.today()
 
         db = await self.db.get_connection()
@@ -152,6 +154,9 @@ class DeerPipeLLMTools:
         Returns:
             打卡结果数据
         """
+        operator_id = normalize_user_id(operator_id)
+        # 确保 target_ids 中的所有 ID 都是字符串
+        target_ids = [normalize_user_id(tid) for tid in target_ids]
         # 检查是否允许AI帮用户🦌
         if not self._is_ai_help_deer_allowed():
             return {
@@ -189,7 +194,8 @@ class DeerPipeLLMTools:
 
         db = await self.db.get_connection()
         try:
-            for target_id in target_ids:
+            for raw_target_id in target_ids:
+                target_id = normalize_user_id(raw_target_id)
                 allowed = await self.db.is_help_allowed(db, target_id)
                 if not allowed:
                     results.append(
@@ -262,6 +268,7 @@ class DeerPipeLLMTools:
         Returns:
             日历数据
         """
+        user_id = normalize_user_id(user_id)
         today = dt.date.today()
         year = year or today.year
         month = month or today.month
@@ -355,6 +362,7 @@ class DeerPipeLLMTools:
         Returns:
             补打卡结果
         """
+        user_id = normalize_user_id(user_id)
         # 检查每日补🦌次数限制
         daily_limit = self._get_daily_retro_limit()
         if daily_limit <= 0:
@@ -432,6 +440,7 @@ class DeerPipeLLMTools:
         Returns:
             设置结果
         """
+        user_id = normalize_user_id(user_id)
         db = await self.db.get_connection()
         try:
             await self.db.set_help_allowed(db, user_id, allowed)
@@ -466,6 +475,7 @@ class DeerPipeLLMTools:
         Returns:
             用户统计
         """
+        user_id = normalize_user_id(user_id)
         db = await self.db.get_connection()
         try:
             today = dt.date.today()

@@ -10,11 +10,25 @@ import base64
 import calendar
 import re
 from pathlib import Path
+from typing import Any
 
 import aiohttp
 
 from astrbot.api import logger
 from astrbot.core.message.components import At
+
+
+def normalize_user_id(user_id: Any) -> str:
+    """将用户 ID 归一化为字符串.
+
+    Args:
+        user_id: 任意类型的用户 ID
+
+    Returns:
+        字符串类型的用户 ID
+    """
+    return str(user_id)
+
 
 # HTTP 请求超时时间 (秒)
 HTTP_TIMEOUT_SECONDS = 15
@@ -117,7 +131,7 @@ def extract_mention_user_ids(messages: list[At]) -> set[str]:
     Returns:
         被 @ 的用户 ID 集合（自动去重）
     """
-    return {str(m.qq) for m in messages}
+    return {normalize_user_id(m.qq) for m in messages}
 
 
 def parse_allow_flag(text: str) -> bool | None:

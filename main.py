@@ -50,7 +50,7 @@ from .data_manager import DataManager
 from .database import DatabaseManager
 from .llm_tools import DeerPipeLLMTools
 from .renderer import CalendarRenderer
-from .utils import extract_mention_user_ids
+from .utils import extract_mention_user_ids, normalize_user_id
 
 
 class DeerPipePlugin(Star):
@@ -150,7 +150,7 @@ class DeerPipePlugin(Star):
         Returns:
             JSON result with success status, date, and stats.
         """
-        user_id = event.get_sender_id()
+        user_id = str(event.get_sender_id())
         result = await self.llm_tools.deer_self(user_id)
 
         # 如果打卡成功，发送🦌历图片
@@ -179,8 +179,10 @@ class DeerPipePlugin(Star):
         Returns:
             JSON result with success status for each target.
         """
-        user_id = event.get_sender_id()
-        bot_id = event.get_self_id()
+        user_id = str(event.get_sender_id())
+        bot_id = str(event.get_self_id()) if event.get_self_id() else None
+        # 确保 target_ids 中的 ID 都是字符串
+        target_ids = [str(tid) for tid in target_ids]
         result = await self.llm_tools.deer_other(user_id, target_ids, bot_id)
 
         # 如果帮打卡成功，为第一个成功的用户发送🦌历图片
@@ -217,7 +219,7 @@ class DeerPipePlugin(Star):
         Returns:
             JSON result with success status, retroactive date, and daily limit info.
         """
-        user_id = event.get_sender_id()
+        user_id = str(event.get_sender_id())
         result = await self.llm_tools.retro_deer(
             user_id,
             day,
@@ -247,7 +249,7 @@ class DeerPipePlugin(Star):
         Returns:
             JSON result with the updated permission setting.
         """
-        user_id = event.get_sender_id()
+        user_id = str(event.get_sender_id())
         result = await self.llm_tools.set_allow_help(user_id, allowed)
         return json.dumps(result, ensure_ascii=False)
 
@@ -267,7 +269,7 @@ class DeerPipePlugin(Star):
         Returns:
             JSON with calendar data, total check-ins, days recorded, consecutive days, and analysis.
         """
-        user_id = event.get_sender_id()
+        user_id = str(event.get_sender_id())
         year_val = year if year > 0 else None
         month_val = month if month > 0 else None
 
@@ -491,7 +493,7 @@ class DeerPipePlugin(Star):
     # ==================================================================
     # Data export/import commands (管理员命令，不是LLM工具)
     # ==================================================================
-    @filter.command_group("管理鹿管数据")
+    @filter.command_group("管理鹿管数据", alias={"管理🦌管数据"})
     async def deer_data_group(self, event: AstrMessageEvent) -> None:
         """鹿管数据管理（导入/导出）"""
 
@@ -698,8 +700,6 @@ class DeerPipePlugin(Star):
         发送 "🦌 @用户" 触发帮他人打卡。
         单人输出日历图片，多人使用 batch_report 模板输出批量报告。
         """
-        from .utils import extract_mention_user_ids
-
         messages = event.message_obj.message
         at_list = [m for m in messages if isinstance(m, At)]
         at_ids = extract_mention_user_ids(at_list)
@@ -717,8 +717,13 @@ class DeerPipePlugin(Star):
                 yield event.plain_result("不可以帮 Bot🦌哦~")
                 return
 
+            logger.debug(
+                f"[DeerPipe] plain_deer_merged_cmd 处理 at_ids: {at_ids}, 类型: {type(list(at_ids)[0])}"
+            )
+
             # 处理帮他人打卡
             today = dt.date.today()
+            sender_id = normalize_user_id(event.get_sender_id())
             db = await self.db.get_connection()
             try:
                 results = []
@@ -726,6 +731,19 @@ class DeerPipePlugin(Star):
                 # 构建 user_id -> At 组件的映射，用于获取昵称
                 at_map = {str(m.qq): m for m in at_list}
                 for target_id in at_ids:
+                    # 跳过 AT 全体成员的非法目标
+                    if target_id == "all":
+                        results.append(
+                            {
+                                "user_id": "all",
+                                "nickname": "全体成员",
+                                "success": False,
+                                "count": 0,
+                                "is_new": False,
+                                "reason": "不能帮全体成员🦌",
+                            }
+                        )
+                        continue
                     # 获取用户名称（优先使用 At 组件中的 name）
                     at_component = at_map.get(target_id)
                     target_name = (
@@ -733,19 +751,29 @@ class DeerPipePlugin(Star):
                         if at_component and at_component.name
                         else target_id
                     )
-                    allowed = await self.db.is_help_allowed(db, target_id)
-                    if not allowed:
-                        results.append(
-                            {
-                                "user_id": target_id,
-                                "nickname": target_name,
-                                "success": False,
-                                "count": 0,
-                                "is_new": False,
-                                "reason": "不允许被帮🦌",
-                            }
+                    # 自己🦌自己总是允许的，不需要检查 allow_help
+                    if target_id != sender_id:
+                        # 调试日志：检查权限
+                        allowed = await self.db.is_help_allowed(db, target_id)
+                        logger.debug(
+                            f"[DeerPipe] 检查用户 {target_id} 的权限: allowed={allowed}, type={type(allowed)}, not_allowed={not allowed}"
                         )
-                        continue
+                        if not allowed:
+                            logger.debug(
+                                f"[DeerPipe] 用户 {target_id} 被拒绝，跳过打卡"
+                            )
+                            results.append(
+                                {
+                                    "user_id": target_id,
+                                    "nickname": target_name,
+                                    "success": False,
+                                    "count": 0,
+                                    "is_new": False,
+                                    "reason": "不允许被帮🦌",
+                                }
+                            )
+                            continue
+                    logger.debug(f"[DeerPipe] 用户 {target_id} 允许打卡，继续执行")
                     # 记录打卡前检查是否已有记录（用于判断 is_new）
                     has_record_before = await self.db.has_record_today(db, target_id)
 
@@ -781,10 +809,20 @@ class DeerPipePlugin(Star):
             # 根据人数决定输出格式
             at_ids_list = list(at_ids)
             if len(at_ids_list) == 1:
-                # 单人：输出被帮者的日历图片
+                # 单人：输出被帮者的日历图片或失败提示
                 target_id = at_ids_list[0]
                 # 从 results 获取已解析的昵称
                 target_name = results[0]["nickname"] if results else target_id
+                result_data = (
+                    results[0] if results else {"success": False, "reason": "未知错误"}
+                )
+
+                if not result_data["success"]:
+                    # 🦌失败，提示命令发起者原因
+                    reason = result_data.get("reason", "无法帮🦌")
+                    yield event.plain_result(f"❌ 无法帮 {target_name} 🦌：{reason}")
+                    return
+
                 async for cal_result, is_text in self.service.render_calendar(
                     event, today, self.html_render, user_id=target_id
                 ):
