@@ -51,7 +51,7 @@ from .data_manager import DataManager
 from .database import DatabaseManager
 from .llm_tools import DeerPipeLLMTools
 from .renderer import CalendarRenderer
-from .utils import extract_mention_user_ids, normalize_user_id, close_aiohttp_session
+from .utils import extract_mention_user_ids, close_aiohttp_session
 
 
 # 导入会话状态管理（线程安全）
@@ -743,7 +743,9 @@ class DeerPipePlugin(Star):
 
             if len(at_ids_list) == 1:
                 # 单人：输出被帮者的日历图片或失败提示
-                result_data = results[0] if results else {"success": False, "reason": "未知错误"}
+                result_data = (
+                    results[0] if results else {"success": False, "reason": "未知错误"}
+                )
                 target_name = result_data["nickname"]
 
                 if not result_data["success"]:
@@ -753,7 +755,10 @@ class DeerPipePlugin(Star):
                     return
 
                 async for cal_result, is_text in self.service.render_calendar(
-                    event, dt.date.today(), self.html_render, user_id=result_data["user_id"]
+                    event,
+                    dt.date.today(),
+                    self.html_render,
+                    user_id=result_data["user_id"],
                 ):
                     if is_text:
                         yield event.plain_result(f"成功帮{target_name}🦌了")

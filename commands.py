@@ -123,14 +123,16 @@ class DeerPipeService:
 
         # 检查是否帮Bot自己打卡
         if self_id and self_id in at_ids:
-            results.append({
-                "user_id": self_id,
-                "nickname": "Bot",
-                "success": False,
-                "count": 0,
-                "is_new": False,
-                "reason": "不可以帮 Bot🦌哦~",
-            })
+            results.append(
+                {
+                    "user_id": self_id,
+                    "nickname": "Bot",
+                    "success": False,
+                    "count": 0,
+                    "is_new": False,
+                    "reason": "不可以帮 Bot🦌哦~",
+                }
+            )
             at_ids = at_ids - {self_id}
 
         # 构建 user_id -> At 组件的映射，用于获取昵称
@@ -147,14 +149,16 @@ class DeerPipeService:
                         if at_component and at_component.name
                         else "全体成员"
                     )
-                    results.append({
-                        "user_id": target_id,
-                        "nickname": target_name,
-                        "success": False,
-                        "count": 0,
-                        "is_new": False,
-                        "reason": "不能帮全体成员🦌",
-                    })
+                    results.append(
+                        {
+                            "user_id": target_id,
+                            "nickname": target_name,
+                            "success": False,
+                            "count": 0,
+                            "is_new": False,
+                            "reason": "不能帮全体成员🦌",
+                        }
+                    )
                     continue
 
                 # 获取用户名称（优先使用 At 组件中的 name）
@@ -169,14 +173,16 @@ class DeerPipeService:
                 if target_id != sender_id:
                     allowed = await self.db.is_help_allowed(db, target_id)
                     if not allowed:
-                        results.append({
-                            "user_id": target_id,
-                            "nickname": target_name,
-                            "success": False,
-                            "count": 0,
-                            "is_new": False,
-                            "reason": "不允许被帮🦌",
-                        })
+                        results.append(
+                            {
+                                "user_id": target_id,
+                                "nickname": target_name,
+                                "success": False,
+                                "count": 0,
+                                "is_new": False,
+                                "reason": "不允许被帮🦌",
+                            }
+                        )
                         continue
 
                 # 记录打卡前检查是否已有记录（用于判断 is_new）
@@ -192,14 +198,16 @@ class DeerPipeService:
                 )
                 today_count = month_map.get(today.day, 0)
 
-                results.append({
-                    "user_id": target_id,
-                    "nickname": target_name,
-                    "success": True,
-                    "count": today_count,
-                    "is_new": not has_record_before,
-                    "reason": None,
-                })
+                results.append(
+                    {
+                        "user_id": target_id,
+                        "nickname": target_name,
+                        "success": True,
+                        "count": today_count,
+                        "is_new": not has_record_before,
+                        "reason": None,
+                    }
+                )
 
             await db.commit()
         except Exception as exc:
@@ -378,7 +386,11 @@ class DeerPipeService:
         return "\n".join(logs) if logs else "没有成功设置任何用户。"
 
     async def handle_deer_past(
-        self, event: AstrMessageEvent, day: int, year: int | None = None, month: int | None = None
+        self,
+        event: AstrMessageEvent,
+        day: int,
+        year: int | None = None,
+        month: int | None = None,
     ) -> str | None:
         """处理补🦌.
 
@@ -494,9 +506,7 @@ class DeerPipeService:
             yield fallback_text, True
 
     @staticmethod
-    def _format_fallback_text(
-            year: int, month: int, month_map: dict[int, int]
-    ) -> str:
+    def _format_fallback_text(year: int, month: int, month_map: dict[int, int]) -> str:
         """生成纯文本日历.
 
         Args:
@@ -511,7 +521,9 @@ class DeerPipeService:
         days_recorded = len(month_map)
 
         # 构建日历表头
-        header = MessageTemplates.get("fallback_calendar_header", year=year, month=month)
+        header = MessageTemplates.get(
+            "fallback_calendar_header", year=year, month=month
+        )
         separator = "=" * 29
 
         # 星期标题 - 使用固定宽度
@@ -543,7 +555,9 @@ class DeerPipeService:
         calendar_body = "\n".join(lines)
 
         # 统计信息
-        stats = MessageTemplates.get("fallback_calendar_stats", days=days_recorded, total=total)
+        stats = MessageTemplates.get(
+            "fallback_calendar_stats", days=days_recorded, total=total
+        )
 
         return (
             f"{header}\n"
