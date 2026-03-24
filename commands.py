@@ -41,7 +41,8 @@ class DeerPipeService:
         self.renderer = renderer
         self.config = config or {}
 
-    def _get_template(self, key: str) -> str:
+    @staticmethod
+    def _get_template(key: str) -> str:
         """获取文本模板.
 
         Args:
@@ -70,7 +71,7 @@ class DeerPipeService:
         Returns:
             操作结果消息
         """
-        user_id = event.get_sender_id()
+        user_id = str(event.get_sender_id())
         today = dt.date.today()
 
         db = await self.db.get_connection()
@@ -115,16 +116,26 @@ class DeerPipeService:
         db = await self.db.get_connection()
         try:
             results: list[str] = []
-            for target_id in at_ids:
+            has_success = False
+            has_failure = False
+            for raw_target_id in at_ids:
+                target_id = str(raw_target_id)
                 allowed = await self.db.is_help_allowed(db, target_id)
+                logger.debug(f"[DeerPipe] handle_deer_other 检查用户 {target_id}: allowed={allowed}, not_allowed={not allowed}")
                 if not allowed:
-                    results.append(f"用户 {target_id} 不允许被帮🦌")
+                    results.append(f"❌ 用户 {target_id} 不允许被帮🦌")
+                    has_failure = True
                     continue
                 await self.db.record_attendance(
                     db, target_id, today.year, today.month, today.day
                 )
-                results.append(f"成功帮{target_id}🦌了")
+                results.append(f"✅ 成功帮 {target_id} 🦌了")
+                has_success = True
             await db.commit()
+
+            # 如果全部失败，添加提示信息
+            if has_failure and not has_success:
+                results.append("\n提示：用户已设置禁止被🦌，无法帮其打卡。")
         except Exception as exc:
             logger.error(f"deer_other failed: {exc}")
             return "操作失败，请稍后重试。"
@@ -143,12 +154,15 @@ class DeerPipeService:
         Returns:
             操作结果消息
         """
-        user_id = event.get_sender_id()
+        user_id = str(event.get_sender_id())
+        sender_name = event.get_sender_name()
+        logger.debug(f"[DeerPipe] handle_set_self_help: raw user_id={user_id}, name={sender_name}, allowed={allowed}")
 
         db = await self.db.get_connection()
         try:
             await self.db.set_help_allowed(db, user_id, allowed)
             await db.commit()
+            logger.debug(f"[DeerPipe] 用户 {user_id} 设置 allow_help={allowed} 成功")
         except Exception as exc:
             logger.error(f"set_self_help_status failed: {exc}")
             return "操作失败，请稍后重试。"
@@ -186,10 +200,12 @@ class DeerPipeService:
         db = await self.db.get_connection()
         try:
             logs: list[str] = []
-            for target_id in at_ids:
+            for raw_target_id in at_ids:
+                target_id = str(raw_target_id)
                 await self.db.set_help_allowed(db, target_id, allowed)
                 status_str = "允许" if allowed else "禁止"
                 logs.append(f"用户 {target_id} 被🦌策略设置为: {status_str}")
+                logger.debug(f"[DeerPipe] 管理员设置用户 {target_id} allow_help={allowed}")
             await db.commit()
         except Exception as exc:
             logger.error(f"set_other_help_status failed: {exc}")
@@ -221,7 +237,7 @@ class DeerPipeService:
         if target_date > today:
             return "不能对未来的日期补🦌哦~"
 
-        user_id = event.get_sender_id()
+        user_id = str(event.get_sender_id())
         db = await self.db.get_connection()
         try:
             # 检查今日补签次数是否已达上限
@@ -265,7 +281,9 @@ class DeerPipeService:
             渲染结果 (图片 URL 或纯文本, 是否为文本)
         """
         if user_id is None:
-            user_id = event.get_sender_id()
+            user_id = str(event.get_sender_id())
+        else:
+            user_id = str(user_id)
 
         # 从数据库获取日历数据
         db = await self.db.get_connection()
