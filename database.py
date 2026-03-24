@@ -165,7 +165,7 @@ class DatabaseManager:
 
     @staticmethod
     async def record_attendance(
-            db: aiosqlite.Connection, user_id: str, year: int, month: int, day: int
+        db: aiosqlite.Connection, user_id: str, year: int, month: int, day: int
     ) -> None:
         """记录用户打卡.
 
@@ -314,7 +314,7 @@ class DatabaseManager:
 
     @staticmethod
     async def get_calendar_data(
-            db: aiosqlite.Connection, user_id: str, year: int, month: int
+        db: aiosqlite.Connection, user_id: str, year: int, month: int
     ) -> dict[int, int]:
         """获取日历展示所需数据.
 
@@ -339,7 +339,7 @@ class DatabaseManager:
 
     @staticmethod
     async def get_calendar_data_batch(
-            db: aiosqlite.Connection, user_ids: list[str], year: int, month: int
+        db: aiosqlite.Connection, user_ids: list[str], year: int, month: int
     ) -> dict[str, dict[int, int]]:
         """批量获取多个用户的日历展示所需数据.
 
@@ -375,9 +375,7 @@ class DatabaseManager:
         return result
 
     @staticmethod
-    async def has_record_today(
-            db: aiosqlite.Connection, user_id: str
-    ) -> bool:
+    async def has_record_today(db: aiosqlite.Connection, user_id: str) -> bool:
         """检查用户今天是否已有打卡记录.
 
         Args:
@@ -471,9 +469,7 @@ class DatabaseManager:
         }
 
     @staticmethod
-    async def import_all_data(
-            db: aiosqlite.Connection, data: dict
-    ) -> tuple[int, int]:
+    async def import_all_data(db: aiosqlite.Connection, data: dict) -> tuple[int, int]:
         """导入数据.
 
         Args:

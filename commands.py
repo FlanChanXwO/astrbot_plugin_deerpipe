@@ -121,7 +121,9 @@ class DeerPipeService:
             for raw_target_id in at_ids:
                 target_id = str(raw_target_id)
                 allowed = await self.db.is_help_allowed(db, target_id)
-                logger.debug(f"[DeerPipe] handle_deer_other 检查用户 {target_id}: allowed={allowed}, not_allowed={not allowed}")
+                logger.debug(
+                    f"[DeerPipe] handle_deer_other 检查用户 {target_id}: allowed={allowed}, not_allowed={not allowed}"
+                )
                 if not allowed:
                     results.append(f"❌ 用户 {target_id} 不允许被帮🦌")
                     has_failure = True
@@ -156,7 +158,9 @@ class DeerPipeService:
         """
         user_id = str(event.get_sender_id())
         sender_name = event.get_sender_name()
-        logger.debug(f"[DeerPipe] handle_set_self_help: raw user_id={user_id}, name={sender_name}, allowed={allowed}")
+        logger.debug(
+            f"[DeerPipe] handle_set_self_help: raw user_id={user_id}, name={sender_name}, allowed={allowed}"
+        )
 
         db = await self.db.get_connection()
         try:
@@ -205,7 +209,9 @@ class DeerPipeService:
                 await self.db.set_help_allowed(db, target_id, allowed)
                 status_str = "允许" if allowed else "禁止"
                 logs.append(f"用户 {target_id} 被🦌策略设置为: {status_str}")
-                logger.debug(f"[DeerPipe] 管理员设置用户 {target_id} allow_help={allowed}")
+                logger.debug(
+                    f"[DeerPipe] 管理员设置用户 {target_id} allow_help={allowed}"
+                )
             await db.commit()
         except Exception as exc:
             logger.error(f"set_other_help_status failed: {exc}")
