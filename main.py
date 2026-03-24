@@ -493,7 +493,7 @@ class DeerPipePlugin(Star):
     # ==================================================================
     # Data export/import commands (管理员命令，不是LLM工具)
     # ==================================================================
-    @filter.command_group("管理鹿管数据")
+    @filter.command_group("管理鹿管数据",alias={"管理🦌管数据"})
     async def deer_data_group(self, event: AstrMessageEvent) -> None:
         """鹿管数据管理（导入/导出）"""
 
@@ -723,6 +723,7 @@ class DeerPipePlugin(Star):
 
             # 处理帮他人打卡
             today = dt.date.today()
+            sender_id = str(event.get_sender_id())
             db = await self.db.get_connection()
             try:
                 results = []
@@ -730,6 +731,19 @@ class DeerPipePlugin(Star):
                 # 构建 user_id -> At 组件的映射，用于获取昵称
                 at_map = {str(m.qq): m for m in at_list}
                 for target_id in at_ids:
+                    # 跳过 AT 全体成员的非法目标
+                    if target_id == "all":
+                        results.append(
+                            {
+                                "user_id": "all",
+                                "nickname": "全体成员",
+                                "success": False,
+                                "count": 0,
+                                "is_new": False,
+                                "reason": "不能帮全体成员🦌",
+                            }
+                        )
+                        continue
                     # 获取用户名称（优先使用 At 组件中的 name）
                     at_component = at_map.get(target_id)
                     target_name = (
@@ -737,24 +751,26 @@ class DeerPipePlugin(Star):
                         if at_component and at_component.name
                         else target_id
                     )
-                    # 调试日志：检查权限
-                    allowed = await self.db.is_help_allowed(db, target_id)
-                    logger.debug(
-                        f"[DeerPipe] 检查用户 {target_id} 的权限: allowed={allowed}, type={type(allowed)}, not_allowed={not allowed}"
-                    )
-                    if not allowed:
-                        logger.debug(f"[DeerPipe] 用户 {target_id} 被拒绝，跳过打卡")
-                        results.append(
-                            {
-                                "user_id": target_id,
-                                "nickname": target_name,
-                                "success": False,
-                                "count": 0,
-                                "is_new": False,
-                                "reason": "不允许被帮🦌",
-                            }
+                    # 自己🦌自己总是允许的，不需要检查 allow_help
+                    if target_id != sender_id:
+                        # 调试日志：检查权限
+                        allowed = await self.db.is_help_allowed(db, target_id)
+                        logger.debug(
+                            f"[DeerPipe] 检查用户 {target_id} 的权限: allowed={allowed}, type={type(allowed)}, not_allowed={not allowed}"
                         )
-                        continue
+                        if not allowed:
+                            logger.debug(f"[DeerPipe] 用户 {target_id} 被拒绝，跳过打卡")
+                            results.append(
+                                {
+                                    "user_id": target_id,
+                                    "nickname": target_name,
+                                    "success": False,
+                                    "count": 0,
+                                    "is_new": False,
+                                    "reason": "不允许被帮🦌",
+                                }
+                            )
+                            continue
                     logger.debug(f"[DeerPipe] 用户 {target_id} 允许打卡，继续执行")
                     # 记录打卡前检查是否已有记录（用于判断 is_new）
                     has_record_before = await self.db.has_record_today(db, target_id)

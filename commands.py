@@ -113,6 +113,7 @@ class DeerPipeService:
             return "不可以帮 Bot🦌哦~"
 
         today = dt.date.today()
+        sender_id = normalize_user_id(event.get_sender_id())
         db = await self.db.get_connection()
         try:
             results: list[str] = []
@@ -120,14 +121,22 @@ class DeerPipeService:
             has_failure = False
             for raw_target_id in at_ids:
                 target_id = normalize_user_id(raw_target_id)
-                allowed = await self.db.is_help_allowed(db, target_id)
-                logger.debug(
-                    f"[DeerPipe] handle_deer_other 检查用户 {target_id}: allowed={allowed}, not_allowed={not allowed}"
-                )
-                if not allowed:
-                    results.append(f"❌ 用户 {target_id} 不允许被帮🦌")
+                # 跳过 AT 全体成员的非法目标
+                if target_id == "all":
+                    results.append("❌ 不能帮全体成员🦌")
                     has_failure = True
                     continue
+                # 用户自己🦌自己总是允许的，不需要检查 allow_help
+                logger.debug("target_id = %s ; sender_id = %s", target_id, sender_id)
+                if target_id != sender_id:
+                    allowed = await self.db.is_help_allowed(db, target_id)
+                    logger.debug(
+                        f"[DeerPipe] handle_deer_other 检查用户 {target_id}: allowed={allowed}, not_allowed={not allowed}"
+                    )
+                    if not allowed:
+                        results.append(f"❌ 用户 {target_id} 不允许被帮🦌")
+                        has_failure = True
+                        continue
                 await self.db.record_attendance(
                     db, target_id, today.year, today.month, today.day
                 )
@@ -193,7 +202,6 @@ class DeerPipeService:
         """
         if event.get_message_type() != MessageType.GROUP_MESSAGE:
             return self._get_template("group_only").format()
-
         # 提取提及的用户
         messages = event.message_obj.message
         at_list = [m for m in messages if isinstance(m, At)]
