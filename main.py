@@ -51,8 +51,7 @@ from .data_manager import DataManager
 from .database import DatabaseManager
 from .llm_tools import DeerPipeLLMTools
 from .renderer import CalendarRenderer
-from .utils import extract_mention_user_ids, normalize_user_id, close_aiohttp_session
-
+from .utils import close_aiohttp_session, extract_mention_user_ids
 
 # 导入会话状态管理（线程安全）
 _import_session_lock = asyncio.Lock()
