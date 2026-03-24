@@ -459,7 +459,9 @@ class DeerPipeService:
             await db.close()
 
         try:
-            return MessageTemplates.get("deer_past_success", month=target_month, day=day)
+            return MessageTemplates.get(
+                "deer_past_success", month=target_month, day=day
+            )
         except TemplateKeyError as e:
             logger.error(f"Template error: {e}")
             return f"成功补🦌 {target_month}月{day}日"
