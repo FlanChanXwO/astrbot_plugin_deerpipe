@@ -493,7 +493,7 @@ class DeerPipePlugin(Star):
     # ==================================================================
     # Data export/import commands (管理员命令，不是LLM工具)
     # ==================================================================
-    @filter.command_group("管理鹿管数据",alias={"管理🦌管数据"})
+    @filter.command_group("管理鹿管数据", alias={"管理🦌管数据"})
     async def deer_data_group(self, event: AstrMessageEvent) -> None:
         """鹿管数据管理（导入/导出）"""
 
@@ -759,7 +759,9 @@ class DeerPipePlugin(Star):
                             f"[DeerPipe] 检查用户 {target_id} 的权限: allowed={allowed}, type={type(allowed)}, not_allowed={not allowed}"
                         )
                         if not allowed:
-                            logger.debug(f"[DeerPipe] 用户 {target_id} 被拒绝，跳过打卡")
+                            logger.debug(
+                                f"[DeerPipe] 用户 {target_id} 被拒绝，跳过打卡"
+                            )
                             results.append(
                                 {
                                     "user_id": target_id,
