@@ -50,7 +50,7 @@ from .data_manager import DataManager
 from .database import DatabaseManager
 from .llm_tools import DeerPipeLLMTools
 from .renderer import CalendarRenderer
-from .utils import extract_mention_user_ids
+from .utils import extract_mention_user_ids, normalize_user_id
 
 
 class DeerPipePlugin(Star):
@@ -723,7 +723,7 @@ class DeerPipePlugin(Star):
 
             # 处理帮他人打卡
             today = dt.date.today()
-            sender_id = str(event.get_sender_id())
+            sender_id = normalize_user_id(event.get_sender_id())
             db = await self.db.get_connection()
             try:
                 results = []
