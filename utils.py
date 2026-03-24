@@ -29,6 +29,7 @@ def normalize_user_id(user_id: Any) -> str:
     """
     return str(user_id)
 
+
 # HTTP 请求超时时间 (秒)
 HTTP_TIMEOUT_SECONDS = 15
 
