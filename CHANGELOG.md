@@ -29,6 +29,8 @@
   - `calendar.monthrange()` 和 `dt.date()` 调用前校验参数，捕获 ValueError
 - **重复打卡问题**: 修复 `deer_other` 工具未对 `target_ids` 去重的问题
   - 现在使用 `seen` 集合去重，避免重复 ID 累加同日打卡次数
+- **重复日志输出**: 修复 `batch_deer_other` 与上层调用方的重复日志问题
+  - `batch_deer_other` 不再记录错误日志，由上层 `plain_deer_merged_cmd` 统一记录
 
 ### Changed
 - **代码复用重构**: 提取 `plain_deer_merged_cmd` 与 `handle_deer_other` 的重复逻辑
@@ -46,6 +48,12 @@
   - 新增 `deer_records[i].user_id` 类型检查（必须为字符串）
   - 新增 `_is_valid_date()` 函数验证年月日组合的真实性（如排除 2 月 31 日）
   - 使用 `datetime.date()` 验证日期合法性
+- **导入会话状态隔离**: 将会话状态从模块级全局变量改为实例级属性
+  - 避免同一进程内多个插件实例之间的状态干扰
+  - 每个 `DeerPipePlugin` 实例拥有独立的 `_import_sessions`、`_import_session_lock`
+- **头像缓存锁统一**: 缓存读取操作统一到锁内进行
+  - `_get_cached_avatar` 的缓存检查从"无锁读"改为"锁内读写"
+  - 保证缓存操作的一致性，避免潜在的竞态条件
 
 ### Fixed
 - **AT 全体成员处理**: 修复用户 AT 全体成员 (`@all`) 时的权限判断 Bug

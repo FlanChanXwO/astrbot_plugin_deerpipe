@@ -55,6 +55,27 @@ async def _cleanup_avatar_cache(now: float | None = None) -> None:
         _avatar_cache.popitem(last=False)
 
 
+async def _fetch_avatar_with_cache(user_id: str, now: float) -> str:
+    """实际获取头像并更新缓存（内部函数）.
+
+    Args:
+        user_id: 用户 ID
+        now: 当前时间戳
+
+    Returns:
+        头像的 base64 data URI，失败返回空字符串
+    """
+    data = await fetch_avatar_base64(user_id)
+    if data:
+        # 清理过期条目并控制容量，然后添加新条目
+        async with _avatar_cache_lock:
+            await _cleanup_avatar_cache(now)
+            _avatar_cache[user_id] = (now, data)
+            _avatar_cache.move_to_end(user_id)
+        logger.debug(f"[DeerPipe] 头像缓存更新: {user_id}")
+    return data
+
+
 class CalendarRenderer:
     """日历渲染器.
 
@@ -76,18 +97,20 @@ class CalendarRenderer:
         """
         now = time.time()
 
-        # 第一层检查：在锁外快速检查缓存（无锁读）
-        cached = _avatar_cache.get(user_id)
-        if cached is not None:
-            timestamp, data = cached
-            if now - timestamp < AVATAR_CACHE_TTL:
-                logger.debug(f"[DeerPipe] 头像缓存命中: {user_id}")
-                # 更新访问顺序（LRU：将最新使用的移到队尾）
-                async with _avatar_cache_lock:
+        # 在锁内检查缓存（保证读写一致性）
+        async with _avatar_cache_lock:
+            cached = _avatar_cache.get(user_id)
+            if cached is not None:
+                timestamp, data = cached
+                if now - timestamp < AVATAR_CACHE_TTL:
+                    logger.debug(f"[DeerPipe] 头像缓存命中: {user_id}")
+                    # 更新访问顺序（LRU：将最新使用的移到队尾）
                     _avatar_cache.move_to_end(user_id)
-                return data
+                    return data
+                # 缓存已过期，删除
+                _avatar_cache.pop(user_id, None)
 
-        # 第二层检查：查看是否有正在进行中的请求（请求合并）
+        # 缓存未命中，检查是否有正在进行中的请求（请求合并）
         async with _avatar_pending_lock:
             pending_task = _avatar_pending_requests.get(user_id)
             if pending_task is not None and not pending_task.done():
@@ -108,27 +131,6 @@ class CalendarRenderer:
             # 清理已完成的pending请求
             async with _avatar_pending_lock:
                 _avatar_pending_requests.pop(user_id, None)
-
-
-async def _fetch_avatar_with_cache(user_id: str, now: float) -> str:
-    """实际获取头像并更新缓存（内部函数）.
-
-    Args:
-        user_id: 用户 ID
-        now: 当前时间戳
-
-    Returns:
-        头像的 base64 data URI，失败返回空字符串
-    """
-    data = await fetch_avatar_base64(user_id)
-    if data:
-        # 清理过期条目并控制容量，然后添加新条目
-        async with _avatar_cache_lock:
-            await _cleanup_avatar_cache(now)
-            _avatar_cache[user_id] = (now, data)
-            _avatar_cache.move_to_end(user_id)
-        logger.debug(f"[DeerPipe] 头像缓存更新: {user_id}")
-    return data
 
     def __init__(self, base_dir: Path) -> None:
         """初始化日历渲染器.

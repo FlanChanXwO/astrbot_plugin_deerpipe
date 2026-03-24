@@ -53,10 +53,7 @@ from .llm_tools import DeerPipeLLMTools
 from .renderer import CalendarRenderer
 from .utils import close_aiohttp_session, extract_mention_user_ids
 
-# 导入会话状态管理（线程安全）
-_import_session_lock = asyncio.Lock()
-_import_sessions: dict[str, float] = {}  # user_id -> start_time
-_import_session_timeout = 300  # 5分钟超时
+# 导入会话状态管理（实例级，在__init__中初始化）
 
 
 class DeerPipePlugin(Star):
@@ -90,6 +87,11 @@ class DeerPipePlugin(Star):
         self.llm_tools = DeerPipeLLMTools(
             self.db, self.data_manager, self.service, self.config
         )
+
+        # 导入会话状态管理（实例级，避免跨实例共享）
+        self._import_session_lock = asyncio.Lock()
+        self._import_sessions: dict[str, float] = {}
+        self._import_session_timeout = 300  # 5分钟超时
 
     def _config_to_dict(self, config: AstrBotConfig) -> dict:
         """将 AstrBotConfig 转换为普通 dict.
@@ -552,11 +554,10 @@ class DeerPipePlugin(Star):
     @deer_data_group.command("导入", alias={"import"})
     async def import_data_cmd(self, event: AstrMessageEvent):
         """导入数据 (/管理鹿管数据 导入)."""
-        global _import_sessions
-        # 记录导入会话状态（绑定到具体用户，线程安全）
+        # 记录导入会话状态（绑定到具体用户，实例级隔离）
         user_id = event.get_sender_id()
-        async with _import_session_lock:
-            _import_sessions[user_id] = time.time()
+        async with self._import_session_lock:
+            self._import_sessions[user_id] = time.time()
         yield event.plain_result(
             "请发送 JSON 格式的数据文件（通常是 .json 文件），或在回复此消息时附上文件。\n"
             "注意：导入将合并现有数据，相同日期的记录会累加次数。\n"
@@ -574,24 +575,22 @@ class DeerPipePlugin(Star):
         3. 发送者是发起导入命令的用户本人（会话隔离）
         文件大小限制：10MB
         """
-        global _import_sessions
-
         # 检查是否是管理员（内部检查，避免每条消息都触发权限提示）
         if not event.is_admin():
             return
 
         sender_id = event.get_sender_id()
 
-        # 检查是否有活跃的导入会话（线程安全）
-        async with _import_session_lock:
-            session_start = _import_sessions.get(sender_id)
+        # 检查是否有活跃的导入会话（实例级隔离）
+        async with self._import_session_lock:
+            session_start = self._import_sessions.get(sender_id)
             if session_start is None:
                 return
 
             # 检查会话是否超时
             now = time.time()
-            if now - session_start > _import_session_timeout:
-                del _import_sessions[sender_id]
+            if now - session_start > self._import_session_timeout:
+                del self._import_sessions[sender_id]
                 return
 
         temp_file_path: str | None = None
@@ -668,8 +667,8 @@ class DeerPipePlugin(Star):
             yield event.plain_result(f"文件处理失败: {e}")
         finally:
             # 统一清理临时文件和会话状态
-            async with _import_session_lock:
-                _import_sessions.pop(sender_id, None)
+            async with self._import_session_lock:
+                self._import_sessions.pop(sender_id, None)
             if temp_file_path:
                 try:
                     os.unlink(temp_file_path)

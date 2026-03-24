@@ -210,8 +210,8 @@ class DeerPipeService:
                 )
 
             await db.commit()
-        except Exception as exc:
-            logger.error(f"batch_deer_other failed: {exc}")
+        except Exception:
+            # 异常向上抛出，由上层统一记录日志
             raise
         finally:
             await db.close()
