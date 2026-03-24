@@ -62,6 +62,15 @@
 - **自己🦌自己权限**: 修复用户 AT 自己时的权限判断逻辑
   - 当用户设置"禁止被帮🦌"但 AT 自己时，现在允许打卡
   - 自己🦌自己不再受 `allow_help` 设置限制
+- **头像缓存死锁风险**: 修复 `_fetch_avatar_with_cache` 的潜在死锁问题
+  - 移除 `_fetch_avatar_with_cache` 内部的 `async with _avatar_cache_lock`
+  - 调用者 `_get_cached_avatar` 已经持有锁，避免重入死锁
+  - `_cleanup_avatar_cache` 保持"调用者已持锁"设计不变
+- **模板键错误未处理**: 修复 `MessageTemplates.get()` 异常未捕获的问题
+  - `handle_deer_past`、`render_calendar`、`_format_fallback_text` 等方法添加 `TemplateKeyError` 处理
+  - 模板键缺失或参数错误时返回友好降级消息，避免用户看到异常堆栈
+- **重复方法定义**: 移除 `llm_tools.py` 中重复的 `_is_ai_help_self_allowed()` 方法
+  - 保留第 88-97 行的定义，移除第 152-159 行的重复定义
 
 ## [1.0.4] - 2026-03-24
 

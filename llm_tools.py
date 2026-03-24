@@ -85,17 +85,6 @@ class DeerPipeLLMTools:
             return 31
         return limit
 
-    def _is_ai_help_self_allowed(self) -> bool:
-        """检查是否允许AI帮发消息的用户自己打卡.
-
-        Returns:
-            True表示允许
-        """
-        ai_config = self.config.get("ai_behavior")
-        if not isinstance(ai_config, dict):
-            return True  # 默认允许
-        return bool(ai_config.get("allow_ai_help_self", True))
-
     async def deer_self(self, user_id: str) -> dict[str, Any]:
         """用户自我打卡.
 

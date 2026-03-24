@@ -357,7 +357,11 @@ class DeerPipeService:
             操作结果消息，None 表示不处理
         """
         if event.get_message_type() != MessageType.GROUP_MESSAGE:
-            return MessageTemplates.get("group_only")
+            try:
+                return MessageTemplates.get("group_only")
+            except TemplateKeyError as e:
+                logger.error(f"Template error: {e}")
+                return "该命令仅限群聊使用。"
         # 提取提及的用户
         messages = event.message_obj.message
         at_list = [m for m in messages if isinstance(m, At)]
@@ -379,7 +383,11 @@ class DeerPipeService:
             await db.commit()
         except Exception as exc:
             logger.error(f"set_other_help_status failed: {exc}")
-            return MessageTemplates.get("operation_failed")
+            try:
+                return MessageTemplates.get("operation_failed")
+            except TemplateKeyError as e:
+                logger.error(f"Template error: {e}")
+                return "操作失败，请稍后重试。"
         finally:
             await db.close()
 
@@ -430,7 +438,11 @@ class DeerPipeService:
 
             retro_count_today = await self.db.get_today_retro_count(db, user_id)
             if retro_count_today >= daily_retro_limit:
-                return MessageTemplates.get("deer_past_limit")
+                try:
+                    return MessageTemplates.get("deer_past_limit")
+                except TemplateKeyError as e:
+                    logger.error(f"Template error: {e}")
+                    return "操作失败，请稍后重试。"
 
             # 执行补 deer
             await self.db.record_attendance(db, user_id, target_year, target_month, day)
@@ -438,11 +450,19 @@ class DeerPipeService:
             await db.commit()
         except Exception as exc:
             logger.error(f"deer_past failed: {exc}")
-            return MessageTemplates.get("operation_failed")
+            try:
+                return MessageTemplates.get("operation_failed")
+            except TemplateKeyError as e:
+                logger.error(f"Template error: {e}")
+                return "操作失败，请稍后重试。"
         finally:
             await db.close()
 
-        return MessageTemplates.get("deer_past_success", month=target_month, day=day)
+        try:
+            return MessageTemplates.get("deer_past_success", month=target_month, day=day)
+        except TemplateKeyError as e:
+            logger.error(f"Template error: {e}")
+            return f"成功补🦌 {target_month}月{day}日"
 
     async def render_calendar(
         self,
@@ -475,7 +495,11 @@ class DeerPipeService:
             )
         except Exception as exc:
             logger.error(f"Failed to load calendar data: {exc}")
-            yield MessageTemplates.get("calendar_load_failed"), True
+            try:
+                yield MessageTemplates.get("calendar_load_failed"), True
+            except TemplateKeyError as e:
+                logger.error(f"Template error: {e}")
+                yield "日历数据加载失败。", True
             return
         finally:
             await db.close()
@@ -521,9 +545,13 @@ class DeerPipeService:
         days_recorded = len(month_map)
 
         # 构建日历表头
-        header = MessageTemplates.get(
-            "fallback_calendar_header", year=year, month=month
-        )
+        try:
+            header = MessageTemplates.get(
+                "fallback_calendar_header", year=year, month=month
+            )
+        except TemplateKeyError as e:
+            logger.error(f"Template error: {e}")
+            header = f"📅 {year}年{month}月 鹿历"
         separator = "=" * 29
 
         # 星期标题 - 使用固定宽度
@@ -555,9 +583,13 @@ class DeerPipeService:
         calendar_body = "\n".join(lines)
 
         # 统计信息
-        stats = MessageTemplates.get(
-            "fallback_calendar_stats", days=days_recorded, total=total
-        )
+        try:
+            stats = MessageTemplates.get(
+                "fallback_calendar_stats", days=days_recorded, total=total
+            )
+        except TemplateKeyError as e:
+            logger.error(f"Template error: {e}")
+            stats = f"📊 统计: 共{days_recorded}天 {total}次"
 
         return (
             f"{header}\n"
