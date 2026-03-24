@@ -5,9 +5,29 @@
 
 from __future__ import annotations
 
+import datetime as dt
+
 from astrbot.api import logger
 
 from .database import DatabaseManager
+
+
+def _is_valid_date(year: int, month: int, day: int) -> bool:
+    """验证日期是否真实存在.
+
+    Args:
+        year: 年份
+        month: 月份
+        day: 日期
+
+    Returns:
+        日期是否有效
+    """
+    try:
+        dt.date(year, month, day)
+        return True
+    except ValueError:
+        return False
 
 
 class DataManager:
@@ -88,6 +108,12 @@ class DataManager:
                             False,
                             f"数据格式无效：deer_records[{i}] 缺少 {field} 字段。",
                         )
+                # 验证 user_id 类型（必须是字符串）
+                if not isinstance(record.get("user_id"), str):
+                    return (
+                        False,
+                        f"数据格式无效：deer_records[{i}].user_id 必须是字符串。",
+                    )
                 # 验证数值类型和范围
                 for field in ["year", "month", "day", "count"]:
                     value = record.get(field)
@@ -112,6 +138,13 @@ class DataManager:
                             False,
                             f"数据格式无效：deer_records[{i}].count 不能为负数。",
                         )
+                # 验证年月日组合的真实性（如排除2月31日）
+                year, month, day = record["year"], record["month"], record["day"]
+                if not _is_valid_date(year, month, day):
+                    return (
+                        False,
+                        f"数据格式无效：deer_records[{i}] 的日期 {year}-{month:02d}-{day:02d} 不存在。",
+                    )
 
         db = await self.db.get_connection()
         try:

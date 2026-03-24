@@ -27,6 +27,9 @@ _avatar_cache_lock = asyncio.Lock()
 AVATAR_CACHE_TTL = 3600  # 1小时
 # 缓存最大条目数，防止内存无限增长
 AVATAR_CACHE_MAX_SIZE = 1024
+# 正在进行中的头像请求（用于请求合并防止缓存击穿）
+_avatar_pending_requests: dict[str, asyncio.Task] = {}
+_avatar_pending_lock = asyncio.Lock()
 
 
 async def _cleanup_avatar_cache(now: float | None = None) -> None:
@@ -52,6 +55,27 @@ async def _cleanup_avatar_cache(now: float | None = None) -> None:
         _avatar_cache.popitem(last=False)
 
 
+async def _fetch_avatar_with_cache(user_id: str, now: float) -> str:
+    """实际获取头像并更新缓存（内部函数）.
+
+    Args:
+        user_id: 用户 ID
+        now: 当前时间戳
+
+    Returns:
+        头像的 base64 data URI，失败返回空字符串
+    """
+    data = await fetch_avatar_base64(user_id)
+    if data:
+        # 清理过期条目并控制容量，然后添加新条目
+        # 注意：调用者 _get_cached_avatar 已经持有 _avatar_cache_lock
+        await _cleanup_avatar_cache(now)
+        _avatar_cache[user_id] = (now, data)
+        _avatar_cache.move_to_end(user_id)
+        logger.debug(f"[DeerPipe] 头像缓存更新: {user_id}")
+    return data
+
+
 class CalendarRenderer:
     """日历渲染器.
 
@@ -63,7 +87,7 @@ class CalendarRenderer:
 
     @staticmethod
     async def _get_cached_avatar(user_id: str) -> str:
-        """获取用户头像，带 TTL 缓存和 LRU 淘汰策略.
+        """获取用户头像，带 TTL 缓存和 LRU 淘汰策略，支持请求合并防止缓存击穿.
 
         Args:
             user_id: 用户 ID
@@ -73,7 +97,7 @@ class CalendarRenderer:
         """
         now = time.time()
 
-        # 检查缓存是否有效（加锁保护）
+        # 在锁内检查缓存（保证读写一致性）
         async with _avatar_cache_lock:
             cached = _avatar_cache.get(user_id)
             if cached is not None:
@@ -86,16 +110,27 @@ class CalendarRenderer:
                 # 缓存已过期，删除
                 _avatar_cache.pop(user_id, None)
 
-        # 缓存未命中或已过期，重新获取（在锁外进行网络请求）
-        data = await fetch_avatar_base64(user_id)
-        if data:
-            # 清理过期条目并控制容量，然后添加新条目
-            async with _avatar_cache_lock:
-                await _cleanup_avatar_cache(now)
-                _avatar_cache[user_id] = (now, data)
-                _avatar_cache.move_to_end(user_id)
-            logger.debug(f"[DeerPipe] 头像缓存更新: {user_id}")
-        return data
+        # 缓存未命中，检查是否有正在进行中的请求（请求合并）
+        async with _avatar_pending_lock:
+            pending_task = _avatar_pending_requests.get(user_id)
+            if pending_task is not None and not pending_task.done():
+                logger.debug(f"[DeerPipe] 头像请求合并: {user_id}")
+                try:
+                    return await pending_task
+                except Exception:
+                    # 如果pending任务失败，继续执行新的请求
+                    pass
+
+            # 创建新的请求任务
+            task = asyncio.create_task(_fetch_avatar_with_cache(user_id, now))
+            _avatar_pending_requests[user_id] = task
+
+        try:
+            return await task
+        finally:
+            # 清理已完成的pending请求
+            async with _avatar_pending_lock:
+                _avatar_pending_requests.pop(user_id, None)
 
     def __init__(self, base_dir: Path) -> None:
         """初始化日历渲染器.

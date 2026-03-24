@@ -30,6 +30,7 @@ AI Behavior Configuration (in WebUI):
 
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
 import json
 import os
@@ -50,7 +51,9 @@ from .data_manager import DataManager
 from .database import DatabaseManager
 from .llm_tools import DeerPipeLLMTools
 from .renderer import CalendarRenderer
-from .utils import extract_mention_user_ids, normalize_user_id
+from .utils import close_aiohttp_session, extract_mention_user_ids
+
+# 导入会话状态管理（实例级，在__init__中初始化）
 
 
 class DeerPipePlugin(Star):
@@ -85,6 +88,11 @@ class DeerPipePlugin(Star):
             self.db, self.data_manager, self.service, self.config
         )
 
+        # 导入会话状态管理（实例级，避免跨实例共享）
+        self._import_session_lock = asyncio.Lock()
+        self._import_sessions: dict[str, float] = {}
+        self._import_session_timeout = 300  # 5分钟超时
+
     def _config_to_dict(self, config: AstrBotConfig) -> dict:
         """将 AstrBotConfig 转换为普通 dict.
 
@@ -108,6 +116,8 @@ class DeerPipePlugin(Star):
     async def terminate(self):
         """插件卸载时清理资源."""
         self._unregister_llm_tools()
+        # 关闭全局 aiohttp session，防止资源泄漏
+        await close_aiohttp_session()
 
     @filter.on_llm_request()
     async def on_llm_request(self, event: AstrMessageEvent, req: ProviderRequest):
@@ -285,7 +295,7 @@ class DeerPipePlugin(Star):
             and stats_result.get("success", False),
             "user_id": user_id,
             "calendar": calendar_result.get("calendar", {}),
-            "stats": calendar_result.get("stats", {}),
+            "stats": stats_result.get("current_month", {}),
             "analysis": calendar_result.get("analysis", {}),
             "user_settings": {
                 "allow_help": stats_result.get("allow_help", True),
@@ -516,6 +526,7 @@ class DeerPipePlugin(Star):
             return
 
         # 创建临时文件并发送
+        temp_path: str | None = None
         try:
             json_str = json.dumps(data, ensure_ascii=False, indent=2)
             with tempfile.NamedTemporaryFile(
@@ -528,29 +539,25 @@ class DeerPipePlugin(Star):
             file_component = File(name="deerpipe_export.json", file=temp_path)
             yield event.chain_result([file_component])
 
-            # 删除临时文件
-            try:
-                os.unlink(temp_path)
-            except (OSError, FileNotFoundError) as e:
-                logger.warning(f"删除临时导出文件失败: {e}")
-
         except OSError as e:
             logger.error(f"导出文件发送失败: {e}")
             yield event.plain_result(f"{msg}\n文件发送失败: {e}")
-
-    # 文件导入相关状态（增加会话隔离）
-    _import_session_timeout = 300  # 5分钟超时
-    _import_session_user_id: str | None = None  # 发起导入的用户ID
-    _import_session_start_time: float = 0  # 导入会话开始时间
+        finally:
+            # 确保临时文件被删除
+            if temp_path:
+                try:
+                    os.unlink(temp_path)
+                except (OSError, FileNotFoundError) as e:
+                    logger.warning(f"删除临时导出文件失败: {e}")
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @deer_data_group.command("导入", alias={"import"})
     async def import_data_cmd(self, event: AstrMessageEvent):
         """导入数据 (/管理鹿管数据 导入)."""
-        # 记录导入会话状态（绑定到具体用户）
+        # 记录导入会话状态（绑定到具体用户，实例级隔离）
         user_id = event.get_sender_id()
-        self._import_session_user_id = user_id
-        self._import_session_start_time = time.time()
+        async with self._import_session_lock:
+            self._import_sessions[user_id] = time.time()
         yield event.plain_result(
             "请发送 JSON 格式的数据文件（通常是 .json 文件），或在回复此消息时附上文件。\n"
             "注意：导入将合并现有数据，相同日期的记录会累加次数。\n"
@@ -572,38 +579,41 @@ class DeerPipePlugin(Star):
         if not event.is_admin():
             return
 
-        # 检查是否有活跃的导入会话
-        now = time.time()
-        session_user_id = getattr(self, "_import_session_user_id", None)
-        session_start = getattr(self, "_import_session_start_time", 0)
-
-        # 检查会话是否超时
-        if now - session_start > self._import_session_timeout:
-            return
-
-        # 检查发送者是否是发起导入命令的用户（会话隔离）
         sender_id = event.get_sender_id()
-        if session_user_id is None or sender_id != session_user_id:
-            return
 
-        # 检查消息中是否有文件
-        messages = event.get_messages()
-        has_file = False
-        for comp in messages:
-            if isinstance(comp, File):
-                has_file = True
-                break
-        if not has_file:
-            return
+        # 检查是否有活跃的导入会话（实例级隔离）
+        async with self._import_session_lock:
+            session_start = self._import_sessions.get(sender_id)
+            if session_start is None:
+                return
 
-        # 处理文件导入
-        for comp in messages:
-            if isinstance(comp, File):
-                try:
+            # 检查会话是否超时
+            now = time.time()
+            if now - session_start > self._import_session_timeout:
+                del self._import_sessions[sender_id]
+                return
+
+        temp_file_path: str | None = None
+
+        try:
+            # 检查消息中是否有文件
+            messages = event.get_messages()
+            has_file = False
+            for comp in messages:
+                if isinstance(comp, File):
+                    has_file = True
+                    break
+            if not has_file:
+                return
+
+            # 处理文件导入
+            for comp in messages:
+                if isinstance(comp, File):
                     # 获取文件内容
                     file_path = await comp.get_file()
                     if not file_path:
                         continue
+                    temp_file_path = file_path
 
                     # 检查文件大小（限制10MB）
                     try:
@@ -618,24 +628,26 @@ class DeerPipePlugin(Star):
                         pass  # 如果无法获取大小，继续尝试处理
 
                     # 读取文件内容
-                    with open(file_path, encoding="utf-8") as f:
-                        file_content = f.read()
+                    try:
+                        with open(file_path, encoding="utf-8") as f:
+                            file_content = f.read()
+                    except OSError as e:
+                        logger.error(f"读取导入文件失败: {e}")
+                        yield event.plain_result(f"读取文件失败: {e}")
+                        return
 
                     # 尝试解析 JSON
                     try:
                         data = json.loads(file_content)
-                    except json.JSONDecodeError:
-                        # 不是有效的 JSON，跳过此文件
-                        continue
+                    except json.JSONDecodeError as e:
+                        yield event.plain_result(f"JSON 解析失败: {e}")
+                        return
 
                     # 验证是否是鹿管数据格式
                     if not isinstance(data, dict):
                         yield event.plain_result(
                             "文件格式错误：JSON 根节点必须是对象（字典）。"
                         )
-                        # 清理会话状态
-                        self._import_session_user_id = None
-                        self._import_session_start_time = 0
                         return
 
                     if "deer_records" not in data and "user_configs" not in data:
@@ -643,32 +655,25 @@ class DeerPipePlugin(Star):
                             "文件格式错误：未找到有效的鹿管数据字段。\n"
                             "请确保文件包含 'deer_records' 或 'user_configs' 字段。"
                         )
-                        # 清理会话状态
-                        self._import_session_user_id = None
-                        self._import_session_start_time = 0
                         return
 
                     # 执行导入
                     success, msg = await self.data_manager.import_data(data)
                     yield event.plain_result(msg)
-
-                    # 清理临时文件
-                    try:
-                        os.unlink(file_path)
-                    except (OSError, FileNotFoundError) as e:
-                        logger.warning(f"删除临时导入文件失败: {e}")
-
-                    # 导入完成后清理会话状态
-                    self._import_session_user_id = None
-                    self._import_session_start_time = 0
                     return
 
-                except OSError as e:
-                    logger.error(f"导入文件处理失败: {e}")
-                    yield event.plain_result(f"文件处理失败: {e}")
-                    # 发生错误时也清理会话状态
-                    self._import_session_user_id = None
-                    self._import_session_start_time = 0
+        except OSError as e:
+            logger.error(f"导入文件处理失败: {e}")
+            yield event.plain_result(f"文件处理失败: {e}")
+        finally:
+            # 统一清理临时文件和会话状态
+            async with self._import_session_lock:
+                self._import_sessions.pop(sender_id, None)
+            if temp_file_path:
+                try:
+                    os.unlink(temp_file_path)
+                except (OSError, FileNotFoundError) as e:
+                    logger.warning(f"删除临时导入文件失败: {e}")
 
     async def handle_import_file(self, file_content: str) -> str:
         """处理导入文件内容.
@@ -721,101 +726,25 @@ class DeerPipePlugin(Star):
                 f"[DeerPipe] plain_deer_merged_cmd 处理 at_ids: {at_ids}, 类型: {type(list(at_ids)[0])}"
             )
 
-            # 处理帮他人打卡
-            today = dt.date.today()
-            sender_id = normalize_user_id(event.get_sender_id())
-            db = await self.db.get_connection()
+            # 使用批量打卡方法
             try:
-                results = []
-                success_count = 0
-                # 构建 user_id -> At 组件的映射，用于获取昵称
-                at_map = {str(m.qq): m for m in at_list}
-                for target_id in at_ids:
-                    # 跳过 AT 全体成员的非法目标
-                    if target_id == "all":
-                        results.append(
-                            {
-                                "user_id": "all",
-                                "nickname": "全体成员",
-                                "success": False,
-                                "count": 0,
-                                "is_new": False,
-                                "reason": "不能帮全体成员🦌",
-                            }
-                        )
-                        continue
-                    # 获取用户名称（优先使用 At 组件中的 name）
-                    at_component = at_map.get(target_id)
-                    target_name = (
-                        at_component.name
-                        if at_component and at_component.name
-                        else target_id
-                    )
-                    # 自己🦌自己总是允许的，不需要检查 allow_help
-                    if target_id != sender_id:
-                        # 调试日志：检查权限
-                        allowed = await self.db.is_help_allowed(db, target_id)
-                        logger.debug(
-                            f"[DeerPipe] 检查用户 {target_id} 的权限: allowed={allowed}, type={type(allowed)}, not_allowed={not allowed}"
-                        )
-                        if not allowed:
-                            logger.debug(
-                                f"[DeerPipe] 用户 {target_id} 被拒绝，跳过打卡"
-                            )
-                            results.append(
-                                {
-                                    "user_id": target_id,
-                                    "nickname": target_name,
-                                    "success": False,
-                                    "count": 0,
-                                    "is_new": False,
-                                    "reason": "不允许被帮🦌",
-                                }
-                            )
-                            continue
-                    logger.debug(f"[DeerPipe] 用户 {target_id} 允许打卡，继续执行")
-                    # 记录打卡前检查是否已有记录（用于判断 is_new）
-                    has_record_before = await self.db.has_record_today(db, target_id)
-
-                    await self.db.record_attendance(
-                        db, target_id, today.year, today.month, today.day
-                    )
-
-                    # 获取更新后的次数
-                    month_map = await self.db.get_calendar_data(
-                        db, target_id, today.year, today.month
-                    )
-                    today_count = month_map.get(today.day, 0)
-
-                    results.append(
-                        {
-                            "user_id": target_id,
-                            "nickname": target_name,
-                            "success": True,
-                            "count": today_count,
-                            "is_new": not has_record_before,
-                        }
-                    )
-                    success_count += 1
-
-                await db.commit()
+                results = await self.service.batch_deer_other(
+                    event.get_sender_id(), at_ids, at_list, self_id
+                )
             except Exception as exc:
                 logger.error(f"plain_help_deer failed: {exc}")
                 yield event.plain_result("操作失败，请稍后重试。")
                 return
-            finally:
-                await db.close()
 
-            # 根据人数决定输出格式
+            success_count = sum(1 for r in results if r["success"])
             at_ids_list = list(at_ids)
+
             if len(at_ids_list) == 1:
                 # 单人：输出被帮者的日历图片或失败提示
-                target_id = at_ids_list[0]
-                # 从 results 获取已解析的昵称
-                target_name = results[0]["nickname"] if results else target_id
                 result_data = (
                     results[0] if results else {"success": False, "reason": "未知错误"}
                 )
+                target_name = result_data["nickname"]
 
                 if not result_data["success"]:
                     # 🦌失败，提示命令发起者原因
@@ -824,7 +753,10 @@ class DeerPipePlugin(Star):
                     return
 
                 async for cal_result, is_text in self.service.render_calendar(
-                    event, today, self.html_render, user_id=target_id
+                    event,
+                    dt.date.today(),
+                    self.html_render,
+                    user_id=result_data["user_id"],
                 ):
                     if is_text:
                         yield event.plain_result(f"成功帮{target_name}🦌了")
