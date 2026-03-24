@@ -67,12 +67,12 @@ async def _fetch_avatar_with_cache(user_id: str, now: float) -> str:
     """
     data = await fetch_avatar_base64(user_id)
     if data:
-        # 清理过期条目并控制容量，然后添加新条目
-        # 注意：调用者 _get_cached_avatar 已经持有 _avatar_cache_lock
-        await _cleanup_avatar_cache(now)
-        _avatar_cache[user_id] = (now, data)
-        _avatar_cache.move_to_end(user_id)
-        logger.debug(f"[DeerPipe] 头像缓存更新: {user_id}")
+        # 获取锁后更新缓存，确保并发安全
+        async with _avatar_cache_lock:
+            await _cleanup_avatar_cache(now)
+            _avatar_cache[user_id] = (now, data)
+            _avatar_cache.move_to_end(user_id)
+            logger.debug(f"[DeerPipe] 头像缓存更新: {user_id}")
     return data
 
 
