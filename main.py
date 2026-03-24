@@ -105,10 +105,9 @@ class DeerPipePlugin(Star):
                 return plugin_config
         # 如果 config 是 dict 类型，检查是否包含插件配置键
         if isinstance(config, dict):
-            if self.name in config:
-                plugin_config = config.get(self.name)
-                if isinstance(plugin_config, dict):
-                    return plugin_config
+            plugin_config = config.get(self.name)
+            if isinstance(plugin_config, dict):
+                return plugin_config
             # 不含插件配置键时返回空 dict，而不是整个 config
             return {}
         return {}
@@ -556,8 +555,17 @@ class DeerPipePlugin(Star):
         """导入数据 (/管理鹿管数据 导入)."""
         # 记录导入会话状态（绑定到具体用户，实例级隔离）
         user_id = event.get_sender_id()
+        now = time.time()
         async with self._import_session_lock:
-            self._import_sessions[user_id] = time.time()
+            # 清理所有超时的会话，防止内存泄漏
+            timeout_threshold = now - self._import_session_timeout
+            expired_keys = [
+                sid for sid, start_time in self._import_sessions.items()
+                if start_time < timeout_threshold
+            ]
+            for sid in expired_keys:
+                del self._import_sessions[sid]
+            self._import_sessions[user_id] = now
         yield event.plain_result(
             "请发送 JSON 格式的数据文件（通常是 .json 文件），或在回复此消息时附上文件。\n"
             "注意：导入将合并现有数据，相同日期的记录会累加次数。\n"
