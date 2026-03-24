@@ -13,6 +13,7 @@ from pathlib import Path
 import aiosqlite
 
 from .models import MonthStats, UserConfig
+from .utils import normalize_user_id
 
 
 def _get_plugin_version() -> str:
@@ -113,7 +114,7 @@ class DatabaseManager:
             db: 数据库连接对象
             user_id: 用户唯一标识
         """
-        user_id = str(user_id)
+        user_id = normalize_user_id(user_id)
         await db.execute(
             "INSERT OR IGNORE INTO deer_config (user_id) VALUES (?)", (user_id,)
         )
@@ -130,7 +131,7 @@ class DatabaseManager:
             是否允许被帮 deer（默认允许）
         """
         # 确保 user_id 是字符串
-        user_id = str(user_id)
+        user_id = normalize_user_id(user_id)
         cursor = await db.execute(
             "SELECT allow_help FROM deer_config WHERE user_id = ?", (user_id,)
         )
@@ -156,7 +157,7 @@ class DatabaseManager:
             user_id: 用户唯一标识
             allowed: 是否允许
         """
-        user_id = str(user_id)
+        user_id = normalize_user_id(user_id)
         await self.ensure_user_config(db, user_id)
         await db.execute(
             "UPDATE deer_config SET allow_help = ? WHERE user_id = ?",
@@ -176,7 +177,7 @@ class DatabaseManager:
             month: 月份
             day: 日期
         """
-        user_id = str(user_id)
+        user_id = normalize_user_id(user_id)
         await db.execute(
             """
             INSERT INTO deer_record (user_id, year, month, day, count)
@@ -197,7 +198,7 @@ class DatabaseManager:
         Returns:
             上次补 deer 日期 (ISO格式字符串，空字符串表示从未补过)
         """
-        user_id = str(user_id)
+        user_id = normalize_user_id(user_id)
         await self.ensure_user_config(db, user_id)
         cursor = await db.execute(
             "SELECT last_retro_date FROM deer_config WHERE user_id = ?", (user_id,)
@@ -215,7 +216,7 @@ class DatabaseManager:
             user_id: 用户唯一标识
             date: 日期字符串 (ISO格式)
         """
-        user_id = str(user_id)
+        user_id = normalize_user_id(user_id)
         await self.ensure_user_config(db, user_id)
         await db.execute(
             "UPDATE deer_config SET last_retro_date = ? WHERE user_id = ?",
@@ -234,7 +235,7 @@ class DatabaseManager:
         Returns:
             今日补 deer 次数
         """
-        user_id = str(user_id)
+        user_id = normalize_user_id(user_id)
         await self.ensure_user_config(db, user_id)
         # 检查是否是新的一天
         last_retro_date = await self.get_last_retro_date(db, user_id)
@@ -260,7 +261,7 @@ class DatabaseManager:
             user_id: 用户唯一标识
             date: 日期字符串 (ISO格式)
         """
-        user_id = str(user_id)
+        user_id = normalize_user_id(user_id)
         last_retro_date = await self.get_last_retro_date(db, user_id)
 
         if last_retro_date == date:
@@ -294,7 +295,7 @@ class DatabaseManager:
         Returns:
             月度统计数据
         """
-        user_id = str(user_id)
+        user_id = normalize_user_id(user_id)
         cursor = await db.execute(
             """
             SELECT day, count FROM deer_record
@@ -327,7 +328,7 @@ class DatabaseManager:
         Returns:
             日期到打卡次数的映射字典
         """
-        user_id = str(user_id)
+        user_id = normalize_user_id(user_id)
         cursor = await db.execute(
             "SELECT day, count FROM deer_record WHERE user_id = ? AND year = ? AND month = ?",
             (user_id, year, month),
@@ -353,7 +354,7 @@ class DatabaseManager:
             用户ID到日期打卡次数映射的字典
         """
         # 确保所有 user_id 都是字符串
-        user_ids = [str(uid) for uid in user_ids]
+        user_ids = [normalize_user_id(uid) for uid in user_ids]
         if not user_ids:
             return {}
 
@@ -387,7 +388,7 @@ class DatabaseManager:
         Returns:
             今天是否有打卡记录
         """
-        user_id = str(user_id)
+        user_id = normalize_user_id(user_id)
         today = dt.date.today()
         cursor = await db.execute(
             "SELECT 1 FROM deer_record WHERE user_id = ? AND year = ? AND month = ? AND day = ?",
@@ -408,7 +409,7 @@ class DatabaseManager:
         Returns:
             用户配置对象
         """
-        user_id = str(user_id)
+        user_id = normalize_user_id(user_id)
         await self.ensure_user_config(db, user_id)
         cursor = await db.execute(
             "SELECT user_id, allow_help, last_retro_date FROM deer_config WHERE user_id = ?",

@@ -15,7 +15,7 @@ from astrbot.core.platform.message_type import MessageType
 
 from .database import DatabaseManager
 from .renderer import CalendarRenderer
-from .utils import extract_mention_user_ids, validate_day
+from .utils import extract_mention_user_ids, normalize_user_id, validate_day
 
 
 class DeerPipeService:
@@ -71,7 +71,7 @@ class DeerPipeService:
         Returns:
             操作结果消息
         """
-        user_id = str(event.get_sender_id())
+        user_id = normalize_user_id(event.get_sender_id())
         today = dt.date.today()
 
         db = await self.db.get_connection()
@@ -119,7 +119,7 @@ class DeerPipeService:
             has_success = False
             has_failure = False
             for raw_target_id in at_ids:
-                target_id = str(raw_target_id)
+                target_id = normalize_user_id(raw_target_id)
                 allowed = await self.db.is_help_allowed(db, target_id)
                 logger.debug(f"[DeerPipe] handle_deer_other 检查用户 {target_id}: allowed={allowed}, not_allowed={not allowed}")
                 if not allowed:
@@ -154,7 +154,7 @@ class DeerPipeService:
         Returns:
             操作结果消息
         """
-        user_id = str(event.get_sender_id())
+        user_id = normalize_user_id(event.get_sender_id())
         sender_name = event.get_sender_name()
         logger.debug(f"[DeerPipe] handle_set_self_help: raw user_id={user_id}, name={sender_name}, allowed={allowed}")
 
@@ -201,7 +201,7 @@ class DeerPipeService:
         try:
             logs: list[str] = []
             for raw_target_id in at_ids:
-                target_id = str(raw_target_id)
+                target_id = normalize_user_id(raw_target_id)
                 await self.db.set_help_allowed(db, target_id, allowed)
                 status_str = "允许" if allowed else "禁止"
                 logs.append(f"用户 {target_id} 被🦌策略设置为: {status_str}")
@@ -237,7 +237,7 @@ class DeerPipeService:
         if target_date > today:
             return "不能对未来的日期补🦌哦~"
 
-        user_id = str(event.get_sender_id())
+        user_id = normalize_user_id(event.get_sender_id())
         db = await self.db.get_connection()
         try:
             # 检查今日补签次数是否已达上限
@@ -281,9 +281,9 @@ class DeerPipeService:
             渲染结果 (图片 URL 或纯文本, 是否为文本)
         """
         if user_id is None:
-            user_id = str(event.get_sender_id())
+            user_id = normalize_user_id(event.get_sender_id())
         else:
-            user_id = str(user_id)
+            user_id = normalize_user_id(user_id)
 
         # 从数据库获取日历数据
         db = await self.db.get_connection()
