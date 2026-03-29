@@ -560,7 +560,8 @@ class DeerPipePlugin(Star):
             # 清理所有超时的会话，防止内存泄漏
             timeout_threshold = now - self._import_session_timeout
             expired_keys = [
-                sid for sid, start_time in self._import_sessions.items()
+                sid
+                for sid, start_time in self._import_sessions.items()
                 if start_time < timeout_threshold
             ]
             for sid in expired_keys:
