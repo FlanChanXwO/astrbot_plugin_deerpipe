@@ -555,7 +555,7 @@ class DeerPipePlugin(Star):
         """导入数据 (/管理鹿管数据 导入)."""
         # 记录导入会话状态（绑定到具体用户，实例级隔离）
         user_id = event.get_sender_id()
-        now = time.time()
+        now = time.monotonic()
         async with self._import_session_lock:
             # 清理所有超时的会话，防止内存泄漏
             timeout_threshold = now - self._import_session_timeout
@@ -596,7 +596,7 @@ class DeerPipePlugin(Star):
                 return
 
             # 检查会话是否超时
-            now = time.time()
+            now = time.monotonic()
             if now - session_start > self._import_session_timeout:
                 del self._import_sessions[sender_id]
                 return

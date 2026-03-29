@@ -36,6 +36,7 @@ async def _cleanup_avatar_cache(now: float | None = None) -> None:
     """清理过期的头像缓存，并在必要时进行容量控制。
 
     注意：调用此函数前必须已持有 _avatar_cache_lock，本函数内部不再获取锁。
+    目前仅由 _fetch_avatar_with_cache 在持有锁时调用。
     """
     if now is None:
         now = time.time()
@@ -57,6 +58,8 @@ async def _cleanup_avatar_cache(now: float | None = None) -> None:
 
 async def _fetch_avatar_with_cache(user_id: str, now: float) -> str:
     """实际获取头像并更新缓存（内部函数）.
+
+    此函数自行管理 _avatar_cache_lock，调用者无需持有锁。
 
     Args:
         user_id: 用户 ID
