@@ -84,22 +84,36 @@ def image_to_data_uri(image_path: Path) -> str:
         return ""
 
 
-async def fetch_avatar_base64(user_id: str, timeout: int = HTTP_TIMEOUT_SECONDS) -> str:
-    """获取 QQ 用户头像并转换为 base64 data URI.
+async def fetch_avatar_base64(
+    user_id: str,
+    platform_name: str | None = None,
+    timeout: int = HTTP_TIMEOUT_SECONDS,
+) -> str:
+    """获取用户头像并转换为 base64 data URI.
 
-    从 QQ 头像服务获取用户头像，失败时返回空字符串。
-    使用全局共享的 ClientSession 以提高性能。
+    根据平台类型选择合适的头像获取方式。
+    目前仅支持 QQ 相关平台 (aiocqhttp, qqofficial, qqofficial_webhook)，
+    其他平台返回空字符串（日历渲染时将使用默认样式）。
 
     Args:
-        user_id: QQ 用户 ID（应为纯数字）
+        user_id: 用户 ID
+        platform_name: 平台类型名称（如 aiocqhttp, discord, telegram 等）
         timeout: 请求超时时间 (秒)
 
     Returns:
-        base64 data URI 字符串
+        base64 data URI 字符串，失败或不支持的平台返回空字符串
     """
-    # 基础输入校验：QQ号应为纯数字
+    # 仅支持 QQ 相关平台
+    qq_platforms = {"aiocqhttp"}
+    if platform_name not in qq_platforms:
+        logger.debug(
+            f"平台 {platform_name} 不支持头像获取，user_id={user_id}，将使用默认样式"
+        )
+        return ""
+
+    # QQ 平台：user_id 应为纯数字
     if not user_id or not user_id.isdigit():
-        logger.warning(f"无效的用户ID格式: {user_id}")
+        logger.warning(f"无效的 QQ 用户 ID 格式: {user_id}")
         return ""
 
     avatar_url = f"https://q1.qlogo.cn/g?b=qq&nk={user_id}&s=640"
@@ -113,7 +127,7 @@ async def fetch_avatar_base64(user_id: str, timeout: int = HTTP_TIMEOUT_SECONDS)
             b64 = base64.b64encode(data).decode("ascii")
             return f"data:image/png;base64,{b64}"
     except Exception as e:
-        logger.warning(f"获取头像失败 {user_id}: {e}")
+        logger.warning(f"获取 QQ 头像失败 {user_id}: {e}")
         return ""
 
 
