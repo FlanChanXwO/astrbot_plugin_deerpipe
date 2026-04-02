@@ -1,8 +1,3 @@
-"""Deer-pipe plugin database module.
-
-提供 SQLite 数据库连接管理和数据操作。
-"""
-
 from __future__ import annotations
 
 import asyncio

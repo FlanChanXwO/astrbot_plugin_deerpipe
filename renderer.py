@@ -1,8 +1,3 @@
-"""Deer-pipe plugin calendar renderer.
-
-日历图片渲染模块，负责构建 HTML 模板数据并调用渲染服务。
-"""
-
 from __future__ import annotations
 
 import asyncio

@@ -1,9 +1,3 @@
-"""Deer-pipe plugin LLM Tools.
-
-AI工具函数模块，为LLM提供结构化的数据访问能力。
-所有工具函数返回字典格式的数据，便于AI分析。
-"""
-
 from __future__ import annotations
 
 import calendar
@@ -12,9 +6,9 @@ from typing import Any
 
 from astrbot.api import logger
 
-from .commands import DeerPipeService
 from .data_manager import DataManager
 from .database import DatabaseManager
+from .service import DeerPipeService
 from .utils import normalize_user_id
 
 

@@ -1,8 +1,3 @@
-"""Deer-pipe plugin utility functions.
-
-通用工具函数模块，包括图片处理和正则表达式等。
-"""
-
 from __future__ import annotations
 
 import asyncio

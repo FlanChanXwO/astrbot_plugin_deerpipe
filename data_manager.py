@@ -1,8 +1,3 @@
-"""Deer-pipe plugin data export/import module.
-
-数据导出导入功能模块。
-"""
-
 from __future__ import annotations
 
 import datetime as dt
