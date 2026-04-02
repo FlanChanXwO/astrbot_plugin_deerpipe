@@ -92,20 +92,19 @@ async def fetch_avatar_base64(
     """获取用户头像并转换为 base64 data URI.
 
     根据平台类型选择合适的头像获取方式。
-    目前仅支持 QQ 相关平台 (aiocqhttp, qqofficial, qqofficial_webhook)，
+    目前仅支持 aiocqhttp 平台（通过 QQ 头像服务获取），
     其他平台返回空字符串（日历渲染时将使用默认样式）。
 
     Args:
         user_id: 用户 ID
-        platform_name: 平台类型名称（如 aiocqhttp, discord, telegram 等）
+        platform_name: 平台类型名称
         timeout: 请求超时时间 (秒)
 
     Returns:
         base64 data URI 字符串，失败或不支持的平台返回空字符串
     """
-    # 仅支持 QQ 相关平台
-    qq_platforms = {"aiocqhttp"}
-    if platform_name not in qq_platforms:
+    # 仅支持 aiocqhttp 平台（QQ 头像服务）
+    if platform_name != "aiocqhttp":
         logger.debug(
             f"平台 {platform_name} 不支持头像获取，user_id={user_id}，将使用默认样式"
         )

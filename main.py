@@ -331,10 +331,8 @@ class DeerPipePlugin(Star):
                 yield event.plain_result("操作失败，请稍后重试。")
                 return
 
-            success_count = sum(1 for r in results if r["success"])
-            at_ids_list = list(at_ids)
-
-            if len(at_ids_list) == 1:
+            # 单人或多人的判断
+            if len(at_ids) == 1:
                 # 单人：输出被帮者的日历图片或失败提示
                 result_data = (
                     results[0] if results else {"success": False, "reason": "未知错误"}
@@ -363,6 +361,7 @@ class DeerPipePlugin(Star):
                         )
             else:
                 # 多人：使用 batch_report 模板
+                success_count = sum(1 for r in results if r["success"])
                 image_url = await self._render_batch_report(results, success_count)
                 if image_url:
                     total = len(results)
@@ -771,10 +770,8 @@ class DeerPipePlugin(Star):
                 yield event.plain_result("操作失败，请稍后重试。")
                 return
 
-            success_count = sum(1 for r in results if r["success"])
-            at_ids_list = list(at_ids)
-
-            if len(at_ids_list) == 1:
+            # 单人或多人的判断
+            if len(at_ids) == 1:
                 # 单人：输出被帮者的日历图片或失败提示
                 result_data = (
                     results[0] if results else {"success": False, "reason": "未知错误"}
@@ -804,6 +801,7 @@ class DeerPipePlugin(Star):
                         )
             else:
                 # 多人：使用 batch_report 模板
+                success_count = sum(1 for r in results if r["success"])
                 image_url = await self._render_batch_report(results, success_count)
                 if image_url:
                     total = len(results)

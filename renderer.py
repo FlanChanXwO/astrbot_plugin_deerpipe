@@ -14,6 +14,20 @@ from astrbot.api import logger
 from .models import CalendarAssets, CalendarDay, CalendarPayload
 from .utils import fetch_avatar_base64
 
+
+def _make_avatar_cache_key(user_id: str, platform_name: str | None) -> str:
+    """统一构造头像缓存 key，避免跨平台 user_id 冲突.
+
+    Args:
+        user_id: 用户 ID
+        platform_name: 平台类型名称
+
+    Returns:
+        组合的缓存 key 字符串
+    """
+    return f"{platform_name}:{user_id}" if platform_name else f"_:{user_id}"
+
+
 # 头像缓存: OrderedDict 实现 LRU 淘汰策略
 _avatar_cache: OrderedDict[str, tuple[float, str]] = OrderedDict()
 # 缓存操作锁，防止并发问题
@@ -38,12 +52,12 @@ async def _cleanup_avatar_cache(now: float | None = None) -> None:
 
     # 删除已过期的条目
     expired_keys = [
-        user_id
-        for user_id, (timestamp, _data_uri) in _avatar_cache.items()
+        cache_key
+        for cache_key, (timestamp, _data_uri) in _avatar_cache.items()
         if now - timestamp > AVATAR_CACHE_TTL
     ]
-    for user_id in expired_keys:
-        _avatar_cache.pop(user_id, None)
+    for cache_key in expired_keys:
+        _avatar_cache.pop(cache_key, None)
 
     # 控制缓存大小，超出时从最旧的条目开始淘汰
     while len(_avatar_cache) > AVATAR_CACHE_MAX_SIZE:
@@ -67,13 +81,15 @@ async def _fetch_avatar_with_cache(
         头像的 base64 data URI，失败返回空字符串
     """
     data = await fetch_avatar_base64(user_id, platform_name)
+    cache_key = _make_avatar_cache_key(user_id, platform_name)
+
     if data:
         # 获取锁后更新缓存，确保并发安全
         async with _avatar_cache_lock:
             await _cleanup_avatar_cache(now)
-            _avatar_cache[user_id] = (now, data)
-            _avatar_cache.move_to_end(user_id)
-            logger.debug(f"[DeerPipe] 头像缓存更新: {user_id}")
+            _avatar_cache[cache_key] = (now, data)
+            _avatar_cache.move_to_end(cache_key)
+            logger.debug(f"[DeerPipe] 头像缓存更新: {cache_key}")
     return data
 
 
@@ -100,25 +116,26 @@ class CalendarRenderer:
             头像的 base64 data URI，失败返回空字符串
         """
         now = time.time()
+        cache_key = _make_avatar_cache_key(user_id, platform_name)
 
         # 在锁内检查缓存（保证读写一致性）
         async with _avatar_cache_lock:
-            cached = _avatar_cache.get(user_id)
+            cached = _avatar_cache.get(cache_key)
             if cached is not None:
                 timestamp, data = cached
                 if now - timestamp < AVATAR_CACHE_TTL:
-                    logger.debug(f"[DeerPipe] 头像缓存命中: {user_id}")
+                    logger.debug(f"[DeerPipe] 头像缓存命中: {cache_key}")
                     # 更新访问顺序（LRU：将最新使用的移到队尾）
-                    _avatar_cache.move_to_end(user_id)
+                    _avatar_cache.move_to_end(cache_key)
                     return data
                 # 缓存已过期，删除
-                _avatar_cache.pop(user_id, None)
+                _avatar_cache.pop(cache_key, None)
 
         # 缓存未命中，检查是否有正在进行中的请求（请求合并）
         async with _avatar_pending_lock:
-            pending_task = _avatar_pending_requests.get(user_id)
+            pending_task = _avatar_pending_requests.get(cache_key)
             if pending_task is not None and not pending_task.done():
-                logger.debug(f"[DeerPipe] 头像请求合并: {user_id}")
+                logger.debug(f"[DeerPipe] 头像请求合并: {cache_key}")
                 try:
                     return await pending_task
                 except Exception:
@@ -129,14 +146,14 @@ class CalendarRenderer:
             task = asyncio.create_task(
                 _fetch_avatar_with_cache(user_id, platform_name, now)
             )
-            _avatar_pending_requests[user_id] = task
+            _avatar_pending_requests[cache_key] = task
 
         try:
             return await task
         finally:
             # 清理已完成的pending请求
             async with _avatar_pending_lock:
-                _avatar_pending_requests.pop(user_id, None)
+                _avatar_pending_requests.pop(cache_key, None)
 
     def __init__(self, base_dir: Path) -> None:
         """初始化日历渲染器.
