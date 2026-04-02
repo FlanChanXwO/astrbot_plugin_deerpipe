@@ -151,7 +151,7 @@ class DeerPipePlugin(Star):
         IMPORTANT: Requires 'allow_ai_help_deer' to be enabled in plugin config.
 
         Args:
-            target_ids(array): List of target user IDs.
+            target_ids(list[string]): List of target user IDs.
 
         Returns:
             JSON result with success status for each target.
