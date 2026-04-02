@@ -296,7 +296,7 @@ class DeerPipeService:
                 await self.db.record_attendance(
                     db, target_id, today.year, today.month, today.day
                 )
-                results.append(f"✅ 成功帮 {target_id} 🦌了")
+                results.append(f"✅ 成功帮 {target_id}🦌了")
                 has_success = True
             await db.commit()
 
