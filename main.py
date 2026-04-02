@@ -1,33 +1,3 @@
-"""Deer-pipe (鹿管) daily check-in plugin.
-
-Migrated from the Java WineFoxBot DeerpipePlugin.
-Tracks daily deer check-ins per user with a calendar view.
-
-Commands:
-    /deer or /鹿 or /🦌              - Check in (deer yourself) for today.
-    /deer @someone                   - Help deer someone else (if they allow it).
-    /允许被鹿 or /允许被🦌            - Allow others to deer you.
-    /禁止被鹿 or /禁止被🦌            - Disallow others from deering you.
-    /设置被鹿 开/关 @user            - Admin: set help-status for others.
-    /retro_deer <day> or /补鹿 <day> - Retroactively check in.
-    /deer_calendar or /鹿历          - Show this month's deer calendar.
-    /last_month_calendar or /上月鹿历 - Show last month's deer calendar.
-    /管理鹿管数据 导出              - Admin: export all data.
-    /管理鹿管数据 导入              - Admin: import data from JSON.
-
-LLM Tools (for AI analysis):
-    deer_self         - User self check-in
-    deer_other        - Help others check-in
-    retro_deer        - Retroactive check-in
-    set_allow_help    - Set allow help status
-    get_user_deer_data - Get calendar + stats (merged query tool)
-
-AI Behavior Configuration (in WebUI):
-    allow_ai_help_deer   - Whether AI can help users check-in
-    allow_ai_be_deered   - Whether users can help AI check-in
-    daily_retro_limit    - Max retroactive check-ins per day
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -46,14 +16,12 @@ from astrbot.core import AstrBotConfig
 from astrbot.core.message.components import At, File
 from astrbot.core.platform.message_type import MessageType
 
-from .commands import DeerPipeService
 from .data_manager import DataManager
 from .database import DatabaseManager
 from .llm_tools import DeerPipeLLMTools
 from .renderer import CalendarRenderer
+from .service import DeerPipeService
 from .utils import close_aiohttp_session, extract_mention_user_ids
-
-# 导入会话状态管理（实例级，在__init__中初始化）
 
 
 class DeerPipePlugin(Star):
@@ -342,16 +310,73 @@ class DeerPipePlugin(Star):
         at_ids = extract_mention_user_ids(at_list)
 
         if at_ids:
-            # 帮他人打卡模式
-            result = await self.service.handle_deer_other(event, at_ids)
-            if result is None:
-                result = "请 @ 要帮🦌的用户。"
-            yield event.plain_result(result)
+            # 帮他人打卡模式 - 统一使用 batch_deer_other
+            if event.get_message_type() != MessageType.GROUP_MESSAGE:
+                yield event.plain_result("该命令仅限群聊使用。")
+                return
+
+            # 禁止帮 bot 自己打卡
+            self_id = event.get_self_id()
+            if self_id and self_id in at_ids:
+                yield event.plain_result("不可以帮 Bot🦌哦~")
+                return
+
+            # 使用批量打卡方法
+            try:
+                results = await self.service.batch_deer_other(
+                    event.get_sender_id(), at_ids, at_list, self_id
+                )
+            except Exception as exc:
+                logger.error(f"deer_cmd help_other failed: {exc}")
+                yield event.plain_result("操作失败，请稍后重试。")
+                return
+
+            # 单人或多人的判断
+            if len(at_ids) == 1:
+                # 单人：输出被帮者的日历图片或失败提示
+                result_data = (
+                    results[0] if results else {"success": False, "reason": "未知错误"}
+                )
+                target_name = result_data["nickname"]
+
+                if not result_data["success"]:
+                    reason = result_data.get("reason", "无法帮🦌")
+                    yield event.plain_result(f"❌ 无法帮 {target_name} 🦌：{reason}")
+                    return
+
+                async for cal_result, is_text in self.service.render_calendar(
+                    event,
+                    dt.date.today(),
+                    self.html_render,
+                    user_id=result_data["user_id"],
+                ):
+                    if is_text:
+                        yield event.plain_result(f"成功帮{target_name}🦌了")
+                        yield event.plain_result(cal_result)
+                    else:
+                        yield (
+                            event.make_result()
+                            .message(f"成功帮{target_name}🦌了")
+                            .url_image(cal_result)
+                        )
+            else:
+                # 多人：使用 batch_report 模板
+                success_count = sum(1 for r in results if r["success"])
+                image_url = await self._render_batch_report(results, success_count)
+                if image_url:
+                    total = len(results)
+                    msg = f"批量帮🦌完成！成功 {success_count}/{total} 人"
+                    yield event.make_result().message(msg).url_image(image_url)
+                else:
+                    # 渲染失败，返回文本结果
+                    lines = [f"批量帮🦌结果（{success_count}/{len(results)} 成功）："]
+                    for r in results:
+                        status = "✅" if r["success"] else "❌"
+                        lines.append(f"{status} {r['nickname']} - 第 {r['count']} 次")
+                    yield event.plain_result("\n".join(lines))
         else:
             # 自我打卡模式
             result = await self.service.handle_deer_self(event)
-
-            # 再渲染日历图片
             async for cal_result, is_text in self.service.render_calendar(
                 event, dt.date.today(), self.html_render
             ):
@@ -745,10 +770,8 @@ class DeerPipePlugin(Star):
                 yield event.plain_result("操作失败，请稍后重试。")
                 return
 
-            success_count = sum(1 for r in results if r["success"])
-            at_ids_list = list(at_ids)
-
-            if len(at_ids_list) == 1:
+            # 单人或多人的判断
+            if len(at_ids) == 1:
                 # 单人：输出被帮者的日历图片或失败提示
                 result_data = (
                     results[0] if results else {"success": False, "reason": "未知错误"}
@@ -778,6 +801,7 @@ class DeerPipePlugin(Star):
                         )
             else:
                 # 多人：使用 batch_report 模板
+                success_count = sum(1 for r in results if r["success"])
                 image_url = await self._render_batch_report(results, success_count)
                 if image_url:
                     total = len(results)

@@ -1,8 +1,3 @@
-"""Deer-pipe plugin calendar renderer.
-
-日历图片渲染模块，负责构建 HTML 模板数据并调用渲染服务。
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -18,6 +13,20 @@ from astrbot.api import logger
 
 from .models import CalendarAssets, CalendarDay, CalendarPayload
 from .utils import fetch_avatar_base64
+
+
+def _make_avatar_cache_key(user_id: str, platform_name: str | None) -> str:
+    """统一构造头像缓存 key，避免跨平台 user_id 冲突.
+
+    Args:
+        user_id: 用户 ID
+        platform_name: 平台类型名称
+
+    Returns:
+        组合的缓存 key 字符串
+    """
+    return f"{platform_name}:{user_id}" if platform_name else f"_:{user_id}"
+
 
 # 头像缓存: OrderedDict 实现 LRU 淘汰策略
 _avatar_cache: OrderedDict[str, tuple[float, str]] = OrderedDict()
@@ -43,12 +52,12 @@ async def _cleanup_avatar_cache(now: float | None = None) -> None:
 
     # 删除已过期的条目
     expired_keys = [
-        user_id
-        for user_id, (timestamp, _data_uri) in _avatar_cache.items()
+        cache_key
+        for cache_key, (timestamp, _data_uri) in _avatar_cache.items()
         if now - timestamp > AVATAR_CACHE_TTL
     ]
-    for user_id in expired_keys:
-        _avatar_cache.pop(user_id, None)
+    for cache_key in expired_keys:
+        _avatar_cache.pop(cache_key, None)
 
     # 控制缓存大小，超出时从最旧的条目开始淘汰
     while len(_avatar_cache) > AVATAR_CACHE_MAX_SIZE:
@@ -56,26 +65,31 @@ async def _cleanup_avatar_cache(now: float | None = None) -> None:
         _avatar_cache.popitem(last=False)
 
 
-async def _fetch_avatar_with_cache(user_id: str, now: float) -> str:
+async def _fetch_avatar_with_cache(
+    user_id: str, platform_name: str | None, now: float
+) -> str:
     """实际获取头像并更新缓存（内部函数）.
 
     此函数自行管理 _avatar_cache_lock，调用者无需持有锁。
 
     Args:
         user_id: 用户 ID
+        platform_name: 平台类型名称
         now: 当前时间戳
 
     Returns:
         头像的 base64 data URI，失败返回空字符串
     """
-    data = await fetch_avatar_base64(user_id)
+    data = await fetch_avatar_base64(user_id, platform_name)
+    cache_key = _make_avatar_cache_key(user_id, platform_name)
+
     if data:
         # 获取锁后更新缓存，确保并发安全
         async with _avatar_cache_lock:
             await _cleanup_avatar_cache(now)
-            _avatar_cache[user_id] = (now, data)
-            _avatar_cache.move_to_end(user_id)
-            logger.debug(f"[DeerPipe] 头像缓存更新: {user_id}")
+            _avatar_cache[cache_key] = (now, data)
+            _avatar_cache.move_to_end(cache_key)
+            logger.debug(f"[DeerPipe] 头像缓存更新: {cache_key}")
     return data
 
 
@@ -89,35 +103,37 @@ class CalendarRenderer:
     MAX_FONT_SIZE = 1 * 1024 * 1024
 
     @staticmethod
-    async def _get_cached_avatar(user_id: str) -> str:
+    async def _get_cached_avatar(user_id: str, platform_name: str | None = None) -> str:
         """获取用户头像，带 TTL 缓存和 LRU 淘汰策略，支持请求合并防止缓存击穿.
 
         Args:
             user_id: 用户 ID
+            platform_name: 平台类型名称（如 aiocqhttp, discord 等）
 
         Returns:
             头像的 base64 data URI，失败返回空字符串
         """
         now = time.time()
+        cache_key = _make_avatar_cache_key(user_id, platform_name)
 
         # 在锁内检查缓存（保证读写一致性）
         async with _avatar_cache_lock:
-            cached = _avatar_cache.get(user_id)
+            cached = _avatar_cache.get(cache_key)
             if cached is not None:
                 timestamp, data = cached
                 if now - timestamp < AVATAR_CACHE_TTL:
-                    logger.debug(f"[DeerPipe] 头像缓存命中: {user_id}")
+                    logger.debug(f"[DeerPipe] 头像缓存命中: {cache_key}")
                     # 更新访问顺序（LRU：将最新使用的移到队尾）
-                    _avatar_cache.move_to_end(user_id)
+                    _avatar_cache.move_to_end(cache_key)
                     return data
                 # 缓存已过期，删除
-                _avatar_cache.pop(user_id, None)
+                _avatar_cache.pop(cache_key, None)
 
         # 缓存未命中，检查是否有正在进行中的请求（请求合并）
         async with _avatar_pending_lock:
-            pending_task = _avatar_pending_requests.get(user_id)
+            pending_task = _avatar_pending_requests.get(cache_key)
             if pending_task is not None and not pending_task.done():
-                logger.debug(f"[DeerPipe] 头像请求合并: {user_id}")
+                logger.debug(f"[DeerPipe] 头像请求合并: {cache_key}")
                 try:
                     return await pending_task
                 except Exception:
@@ -125,15 +141,17 @@ class CalendarRenderer:
                     pass
 
             # 创建新的请求任务
-            task = asyncio.create_task(_fetch_avatar_with_cache(user_id, now))
-            _avatar_pending_requests[user_id] = task
+            task = asyncio.create_task(
+                _fetch_avatar_with_cache(user_id, platform_name, now)
+            )
+            _avatar_pending_requests[cache_key] = task
 
         try:
             return await task
         finally:
             # 清理已完成的pending请求
             async with _avatar_pending_lock:
-                _avatar_pending_requests.pop(user_id, None)
+                _avatar_pending_requests.pop(cache_key, None)
 
     def __init__(self, base_dir: Path) -> None:
         """初始化日历渲染器.
@@ -332,6 +350,7 @@ class CalendarRenderer:
         year: int,
         month: int,
         month_map: dict[int, int],
+        platform_name: str | None = None,
         count_display_mode: Literal["additive", "count"] = "additive",
         show_check_mark: bool = True,
     ) -> CalendarPayload:
@@ -345,6 +364,7 @@ class CalendarRenderer:
             year: 年份
             month: 月份
             month_map: 日期到打卡次数的映射
+            platform_name: 平台类型名称（如 aiocqhttp, discord 等）
             count_display_mode: 打卡次数显示模式
             show_check_mark: 是否显示打勾图标
 
@@ -367,8 +387,8 @@ class CalendarRenderer:
             count_display_mode = "additive"
         calendar_weeks = self._build_calendar_data(month_map, year, month)
 
-        # 获取用户头像（带缓存）
-        avatar_b64 = await self._get_cached_avatar(user_id)
+        # 获取用户头像（带缓存，传入平台信息）
+        avatar_b64 = await self._get_cached_avatar(user_id, platform_name)
 
         # 加载图片资源（根据打卡次数选择角色图片）
         assets = self._load_assets(user_id, month_map)
@@ -391,6 +411,7 @@ class CalendarRenderer:
         year: int,
         month: int,
         month_map: dict[int, int],
+        platform_name: str | None = None,
         count_display_mode: Literal["additive", "count"] = "additive",
         show_check_mark: bool = True,
     ) -> str:
@@ -402,6 +423,7 @@ class CalendarRenderer:
             year: 年份
             month: 月份
             month_map: 日期到打卡次数的映射
+            platform_name: 平台类型名称（如 aiocqhttp, discord 等）
             count_display_mode: 打卡次数显示模式
             show_check_mark: 是否显示打勾图标
 
@@ -420,7 +442,13 @@ class CalendarRenderer:
 
         # 构建数据负载
         payload = await self.build_payload(
-            user_id, year, month, month_map, count_display_mode, show_check_mark
+            user_id,
+            year,
+            month,
+            month_map,
+            platform_name,
+            count_display_mode,
+            show_check_mark,
         )
 
         # 转换为字典 (html_render 需要字典格式)

@@ -1,8 +1,3 @@
-"""Deer-pipe plugin command handlers.
-
-业务逻辑处理模块，封装所有命令的具体实现。
-"""
-
 from __future__ import annotations
 
 import calendar
@@ -245,72 +240,6 @@ class DeerPipeService:
 
         return "成功🦌了"
 
-    async def handle_deer_other(
-        self, event: AstrMessageEvent, at_ids: set[str]
-    ) -> str | None:
-        """处理帮他人打卡.
-
-        Args:
-            event: 消息事件
-            at_ids: 要帮打卡的用户ID集合
-
-        Returns:
-            操作结果消息，None 表示不处理
-        """
-        if event.get_message_type() != MessageType.GROUP_MESSAGE:
-            return "该命令仅限群聊使用。"
-
-        if not at_ids:
-            return None
-
-        # 禁止帮 bot 自己打卡
-        self_id = event.get_self_id()
-        if self_id and self_id in at_ids:
-            return "不可以帮 Bot🦌哦~"
-
-        today = dt.date.today()
-        sender_id = normalize_user_id(event.get_sender_id())
-        db = await self.db.get_connection()
-        try:
-            results: list[str] = []
-            has_success = False
-            has_failure = False
-            for raw_target_id in at_ids:
-                target_id = normalize_user_id(raw_target_id)
-                # 跳过 AT 全体成员的非法目标
-                if target_id == "all":
-                    results.append("❌ 不能帮全体成员🦌")
-                    has_failure = True
-                    continue
-                # 用户自己🦌自己总是允许的，不需要检查 allow_help
-                logger.debug("target_id = %s ; sender_id = %s", target_id, sender_id)
-                if target_id != sender_id:
-                    allowed = await self.db.is_help_allowed(db, target_id)
-                    logger.debug(
-                        f"[DeerPipe] handle_deer_other 检查用户 {target_id}: allowed={allowed}, not_allowed={not allowed}"
-                    )
-                    if not allowed:
-                        results.append(f"❌ 用户 {target_id} 不允许被帮🦌")
-                        has_failure = True
-                        continue
-                await self.db.record_attendance(
-                    db, target_id, today.year, today.month, today.day
-                )
-                results.append(f"✅ 成功帮 {target_id}🦌了")
-                has_success = True
-            await db.commit()
-
-            # 如果全部失败，添加提示信息
-            if has_failure and not has_success:
-                results.append("\n提示：用户已设置禁止被🦌，无法帮其打卡。")
-        except Exception as exc:
-            logger.error(f"deer_other failed: {exc}")
-            return "操作失败，请稍后重试。"
-        finally:
-            await db.close()
-
-        return "\n".join(results)
-
     async def handle_set_self_help(self, event: AstrMessageEvent, allowed: bool) -> str:
         """处理设置自己的帮 deer 权限.
 
@@ -489,6 +418,9 @@ class DeerPipeService:
         else:
             user_id = normalize_user_id(user_id)
 
+        # 获取平台名称，用于头像获取
+        platform_name = event.get_platform_name()
+
         # 从数据库获取日历数据
         db = await self.db.get_connection()
         try:
@@ -519,6 +451,7 @@ class DeerPipeService:
                 month_date.year,
                 month_date.month,
                 month_map,
+                platform_name,
                 count_display_mode,
                 show_check_mark,
             )

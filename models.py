@@ -1,8 +1,3 @@
-"""Deer-pipe plugin data models.
-
-定义插件使用的数据类，包括日历数据和用户配置。
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
