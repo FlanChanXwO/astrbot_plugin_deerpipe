@@ -23,8 +23,6 @@ from .renderer import CalendarRenderer
 from .service import DeerPipeService
 from .utils import close_aiohttp_session, extract_mention_user_ids
 
-# 导入会话状态管理（实例级，在__init__中初始化）
-
 
 class DeerPipePlugin(Star):
     """Deer-pipe daily check-in plugin with SQLite persistence."""
