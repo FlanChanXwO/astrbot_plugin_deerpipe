@@ -87,9 +87,7 @@ class CalendarRenderer:
     MAX_FONT_SIZE = 1 * 1024 * 1024
 
     @staticmethod
-    async def _get_cached_avatar(
-        user_id: str, platform_name: str | None = None
-    ) -> str:
+    async def _get_cached_avatar(user_id: str, platform_name: str | None = None) -> str:
         """获取用户头像，带 TTL 缓存和 LRU 淘汰策略，支持请求合并防止缓存击穿.
 
         Args:
