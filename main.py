@@ -13,7 +13,7 @@ from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.provider import ProviderRequest
 from astrbot.api.star import Context, Star, StarTools
 from astrbot.core import AstrBotConfig
-from astrbot.core.message.components import At, File
+from astrbot.core.message.components import At, File, Plain
 from astrbot.core.platform.message_type import MessageType
 
 from .data_manager import DataManager
@@ -727,25 +727,30 @@ class DeerPipePlugin(Star):
         except Exception as e:
             return f"导入失败: {e}"
 
+    def _is_explicit_slash_command(self, event: AstrMessageEvent) -> bool:
+        """Check whether original message text uses an explicit '/' command prefix."""
+        for comp in event.get_messages():
+            if isinstance(comp, Plain):
+                return comp.text.strip().startswith("/")
+        return False
+
     # ==================================================================
     # Plain message handlers (without / prefix)
     # ==================================================================
 
-    @filter.regex(r"^(🦌|鹿|撸|撸🦌)(?!历)")
+    @filter.regex(r"^(?!/)(🦌|鹿|撸|撸🦌)(?!历)")
     async def plain_deer_merged_cmd(self, event: AstrMessageEvent):
-        """处理纯🦌/帮🦌消息（不带/前缀）.
+        # Skip explicit slash commands to avoid duplicate trigger with @filter.command.
+        if self._is_explicit_slash_command(event):
+            return
 
-        直接发送 🦌、鹿、撸、撸🦌 触发自我打卡。
-        发送 "🦌 @用户" 触发帮他人打卡。
-        单人输出日历图片，多人使用 batch_report 模板输出批量报告。
-        """
+        # 检查是否有 @ 用户
         messages = event.message_obj.message
         at_list = [m for m in messages if isinstance(m, At)]
         at_ids = extract_mention_user_ids(at_list)
 
-        # 判断是帮他人打卡还是自己打卡
         if at_ids:
-            # 帮他人打卡模式
+            # 帮他人打卡模式 - 统一使用 batch_deer_other
             if event.get_message_type() != MessageType.GROUP_MESSAGE:
                 yield event.plain_result("该命令仅限群聊使用。")
                 return
@@ -756,17 +761,13 @@ class DeerPipePlugin(Star):
                 yield event.plain_result("不可以帮 Bot🦌哦~")
                 return
 
-            logger.debug(
-                f"[DeerPipe] plain_deer_merged_cmd 处理 at_ids: {at_ids}, 类型: {type(list(at_ids)[0])}"
-            )
-
             # 使用批量打卡方法
             try:
                 results = await self.service.batch_deer_other(
                     event.get_sender_id(), at_ids, at_list, self_id
                 )
             except Exception as exc:
-                logger.error(f"plain_help_deer failed: {exc}")
+                logger.error(f"deer_cmd help_other failed: {exc}")
                 yield event.plain_result("操作失败，请稍后重试。")
                 return
 
@@ -779,7 +780,6 @@ class DeerPipePlugin(Star):
                 target_name = result_data["nickname"]
 
                 if not result_data["success"]:
-                    # 🦌失败，提示命令发起者原因
                     reason = result_data.get("reason", "无法帮🦌")
                     yield event.plain_result(f"❌ 无法帮 {target_name} 🦌：{reason}")
                     return
@@ -817,20 +817,24 @@ class DeerPipePlugin(Star):
         else:
             # 自我打卡模式
             result = await self.service.handle_deer_self(event)
-
-            # 渲染日历图片
             async for cal_result, is_text in self.service.render_calendar(
                 event, dt.date.today(), self.html_render
             ):
                 if is_text:
+                    # 降级为纯文本时，分开发送
                     yield event.plain_result(result)
                     yield event.plain_result(cal_result)
                 else:
+                    # 文字在上，图片在下，合并为同一条消息
                     yield event.make_result().message(result).url_image(cal_result)
 
-    @filter.regex(r"^🦌历$")
+    @filter.regex(r"^(?!/)🦌历$")
     async def plain_deer_calendar_cmd(self, event: AstrMessageEvent):
-        """处理纯 🦌历 消息（不带/前缀）."""
+        # Skip explicit slash commands to avoid duplicate trigger with @filter.command.
+        if self._is_explicit_slash_command(event):
+            return
+
+        # 处理纯 🦌历 消息（不带/前缀）
         from .utils import extract_mention_user_ids
 
         messages = event.message_obj.message
@@ -865,9 +869,13 @@ class DeerPipePlugin(Star):
                 else:
                     yield event.image_result(result)
 
-    @filter.regex(r"^上月🦌历$")
+    @filter.regex(r"^(?!/)上月🦌历$")
     async def plain_last_month_calendar_cmd(self, event: AstrMessageEvent):
-        """处理纯 上月🦌历 消息（不带/前缀）."""
+        # Skip explicit slash commands to avoid duplicate trigger with @filter.command.
+        if self._is_explicit_slash_command(event):
+            return
+
+        # 处理纯 上月🦌历 消息（不带/前缀）
         from .utils import extract_mention_user_ids
 
         messages = event.message_obj.message
@@ -892,7 +900,7 @@ class DeerPipePlugin(Star):
                 else:
                     yield (
                         event.make_result()
-                        .message(f"{target_name} 的上月鹿历")
+                        .message(f"📅 {target_name} 的上月鹿历")
                         .url_image(result)
                     )
         else:
@@ -903,7 +911,7 @@ class DeerPipePlugin(Star):
                 if is_text:
                     yield event.plain_result(result)
                 else:
-                    yield event.make_result().message("上月鹿历").url_image(result)
+                    yield event.make_result().message("📅 上月鹿历").url_image(result)
 
     async def _render_batch_report(
         self, results: list[dict], success_count: int
