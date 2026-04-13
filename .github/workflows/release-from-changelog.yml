@@ -19,7 +19,7 @@ on:
         required: false
         default: ""
       tag_prefix:
-        description: "Optional tag prefix override. Empty = <plugin>-v"
+        description: "Optional tag prefix override. Empty = v"
         required: false
         default: ""
 
@@ -42,16 +42,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Debug workflow context
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "[debug] workflow=Release From Changelog"
-          echo "[debug] event_name=${{ github.event_name }}"
-          echo "[debug] ref=${{ github.ref }}"
-          echo "[debug] ref_name=${{ github.ref_name }}"
-          echo "[debug] repository=${{ github.repository }}"
-
       - name: Collect changelog files
         id: collect
         shell: bash
@@ -65,25 +55,18 @@ jobs:
               exit 1
             fi
             json="$(jq -cn --arg f "$file" '[$f]')"
-            echo "[debug] manual changelog_path=$file"
-            echo "[debug] changelog_files=$json"
             echo "changelog_files=$json" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           before="${{ github.event.before }}"
           after="${{ github.sha }}"
-          echo "[debug] event.before=$before"
-          echo "[debug] event.after=$after"
 
           if [ -z "$before" ] || [ "$before" = "0000000000000000000000000000000000000000" ]; then
             changed_files="$(git --no-pager ls-files "CHANGELOG.md" "changelog.md" "data/plugins/*/CHANGELOG.md" "data/plugins/*/changelog.md")"
           else
             changed_files="$(git --no-pager diff --name-only "$before" "$after")"
           fi
-
-          echo "[debug] changed_files(raw)"
-          printf '%s\n' "$changed_files"
 
           json="$(printf '%s\n' "$changed_files" \
             | awk '/^(CHANGELOG\.md|changelog\.md)$/ || /^data\/plugins\/[^/]+\/(CHANGELOG\.md|changelog\.md)$/ { print }' \
@@ -95,9 +78,6 @@ jobs:
             json='[]'
           fi
 
-          echo "[debug] changelog_files(filtered)=$json"
-
-          # push 模式下若检测到多个 changelog，要求显式指定目标，避免误发多个 release。
           count="$(printf '%s' "$json" | jq 'length')"
           if [ "$count" -gt 1 ]; then
             echo "Detected multiple changelog files in one push:" >&2
@@ -135,8 +115,6 @@ jobs:
             echo "Missing changelog: $changelog_path" >&2
             exit 1
           fi
-
-          echo "[debug] matrix.changelog=$changelog_path"
 
           plugin_name=""
           case "$changelog_path" in
@@ -182,7 +160,7 @@ jobs:
           if [ -n "${{ inputs.tag_prefix }}" ]; then
             tag="${{ inputs.tag_prefix }}${version}"
           else
-            tag="${plugin_name}-v${version}"
+            tag="v${version}"
           fi
 
           notes_file="release-notes-${plugin_name}.md"
@@ -192,26 +170,10 @@ jobs:
             exit 1
           fi
 
-          echo "[debug] plugin_name=$plugin_name"
-          echo "[debug] version=$version"
-          echo "[debug] tag=$tag"
-          echo "[debug] notes_file=$notes_file"
-          echo "[debug] notes_file_lines=$(wc -l < "$notes_file")"
-
           echo "plugin=$plugin_name" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "notes_file=$notes_file" >> "$GITHUB_OUTPUT"
-
-      - name: Debug notes preview
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "[debug] preview tag=${{ steps.parse.outputs.tag }}"
-          echo "[debug] preview file=${{ steps.parse.outputs.notes_file }}"
-          echo "----- notes begin -----"
-          sed -n '1,120p' "${{ steps.parse.outputs.notes_file }}"
-          echo "----- notes end -----"
 
       - name: Check existing tag/release
         id: dedupe
@@ -279,13 +241,8 @@ jobs:
         shell: bash
         run: |
           tag="${{ steps.parse.outputs.tag }}"
-          echo "[debug] verify tag=$tag"
-          gh release view "$tag" --json tagName,name,url,isDraft,isPrerelease --jq '{tagName,name,url,isDraft,isPrerelease}'
           body="$(gh release view "$tag" --json body --jq '.body // ""')"
           if [ -z "$(printf '%s' "$body" | tr -d '[:space:]')" ]; then
             echo "Release body is still empty for $tag" >&2
             exit 1
           fi
-          echo "----- release body begin -----"
-          printf '%s\n' "$body" | sed -n '1,120p'
-          echo "----- release body end -----"
