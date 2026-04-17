@@ -6,7 +6,9 @@ import json
 import os
 import tempfile
 import time
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from astrbot.api import llm_tool, logger
 from astrbot.api.event import AstrMessageEvent, filter
@@ -22,6 +24,156 @@ from .llm_tools import DeerPipeLLMTools
 from .renderer import CalendarRenderer
 from .service import DeerPipeService
 from .utils import close_aiohttp_session, extract_mention_user_ids
+
+
+@dataclass
+class DeliveryWarning:
+    code: str
+    error: str
+
+
+@dataclass
+class ToolResult:
+    success: bool = False
+    user_id: str | None = None
+    date: str | None = None
+    target_date: str | None = None
+    stats: dict[str, Any] = field(default_factory=dict)
+    calendar: dict[str, Any] = field(default_factory=dict)
+    analysis: dict[str, Any] = field(default_factory=dict)
+    user_settings: dict[str, Any] = field(default_factory=dict)
+    note: str | None = None
+    message: str | None = None
+    error: str | None = None
+    reasons: list[Any] = field(default_factory=list)
+    result: list[Any] = field(default_factory=list)
+    delivery_warning: str | None = None
+    delivery_error: str | None = None
+    delivery_warnings: list[DeliveryWarning] = field(default_factory=list)
+    extra: dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ToolResult":
+        warnings_raw = data.get("delivery_warnings", [])
+        warnings: list[DeliveryWarning] = []
+        if isinstance(warnings_raw, list):
+            for item in warnings_raw:
+                if not isinstance(item, dict):
+                    continue
+                code = item.get("code")
+                error = item.get("error")
+                if isinstance(code, str) and isinstance(error, str):
+                    warnings.append(DeliveryWarning(code=code, error=error))
+
+        known_keys = {
+            "success",
+            "user_id",
+            "date",
+            "target_date",
+            "stats",
+            "calendar",
+            "analysis",
+            "user_settings",
+            "note",
+            "message",
+            "error",
+            "reasons",
+            "result",
+            "delivery_warning",
+            "delivery_error",
+            "delivery_warnings",
+        }
+
+        extra = {k: v for k, v in data.items() if k not in known_keys}
+
+        return cls(
+            success=bool(data.get("success", False)),
+            user_id=data.get("user_id") if isinstance(data.get("user_id"), str) else None,
+            date=data.get("date") if isinstance(data.get("date"), str) else None,
+            target_date=(
+                data.get("target_date")
+                if isinstance(data.get("target_date"), str)
+                else None
+            ),
+            stats=data.get("stats") if isinstance(data.get("stats"), dict) else {},
+            calendar=(
+                data.get("calendar") if isinstance(data.get("calendar"), dict) else {}
+            ),
+            analysis=(
+                data.get("analysis") if isinstance(data.get("analysis"), dict) else {}
+            ),
+            user_settings=(
+                data.get("user_settings")
+                if isinstance(data.get("user_settings"), dict)
+                else {}
+            ),
+            note=data.get("note") if isinstance(data.get("note"), str) else None,
+            message=(
+                data.get("message") if isinstance(data.get("message"), str) else None
+            ),
+            error=data.get("error") if isinstance(data.get("error"), str) else None,
+            reasons=data.get("reasons") if isinstance(data.get("reasons"), list) else [],
+            result=data.get("result") if isinstance(data.get("result"), list) else [],
+            delivery_warning=(
+                data.get("delivery_warning")
+                if isinstance(data.get("delivery_warning"), str)
+                else None
+            ),
+            delivery_error=(
+                data.get("delivery_error")
+                if isinstance(data.get("delivery_error"), str)
+                else None
+            ),
+            delivery_warnings=warnings,
+            extra=extra,
+        )
+
+    def append_delivery_warning(self, warning_code: str, exc: Exception) -> None:
+        error_text = str(exc)
+        if self.delivery_warning is None:
+            self.delivery_warning = warning_code
+        if self.delivery_error is None:
+            self.delivery_error = error_text
+        self.delivery_warnings.append(DeliveryWarning(code=warning_code, error=error_text))
+
+    def to_dict(self) -> dict[str, Any]:
+        data: dict[str, Any] = {
+            "success": self.success,
+        }
+        if self.user_id is not None:
+            data["user_id"] = self.user_id
+        if self.date is not None:
+            data["date"] = self.date
+        if self.target_date is not None:
+            data["target_date"] = self.target_date
+        if self.stats:
+            data["stats"] = self.stats
+        if self.calendar:
+            data["calendar"] = self.calendar
+        if self.analysis:
+            data["analysis"] = self.analysis
+        if self.user_settings:
+            data["user_settings"] = self.user_settings
+        if self.note is not None:
+            data["note"] = self.note
+        if self.message is not None:
+            data["message"] = self.message
+        if self.error is not None:
+            data["error"] = self.error
+        if self.reasons:
+            data["reasons"] = self.reasons
+        if self.result:
+            data["result"] = self.result
+        if self.delivery_warning is not None:
+            data["delivery_warning"] = self.delivery_warning
+        if self.delivery_error is not None:
+            data["delivery_error"] = self.delivery_error
+        if self.delivery_warnings:
+            data["delivery_warnings"] = [
+                {"code": w.code, "error": w.error} for w in self.delivery_warnings
+            ]
+        data.update(self.extra)
+        return data
 
 
 class DeerPipePlugin(Star):
@@ -118,21 +270,29 @@ class DeerPipePlugin(Star):
             logger.error(f"[DeerPipe] 移除LLM工具失败: {e}")
 
     @staticmethod
-    def _append_delivery_warning(result: dict, warning_code: str, exc: Exception) -> None:
-        result["delivery_warning"] = warning_code
-        result["delivery_error"] = str(exc)
+    def _append_delivery_warning(
+        result: ToolResult, warning_code: str, exc: Exception
+    ) -> None:
+        result.append_delivery_warning(warning_code, exc)
 
     @staticmethod
     def _is_send_ack_timeout(exc: Exception) -> bool:
         msg = str(exc).lower()
-        return "retcode=1200" in msg or "timeout" in msg
+        ack_timeout_hints = (
+            "retcode=1200",
+            "retcode:1200",
+            "retcode 1200",
+            '"retcode": 1200',
+            "'retcode': 1200",
+        )
+        return any(hint in msg for hint in ack_timeout_hints)
 
     async def _send_calendar_non_fatal(
         self,
         event: AstrMessageEvent,
         cal_result: str,
         is_text: bool,
-        result: dict,
+        result: ToolResult,
         tool_name: str,
     ) -> None:
         try:
@@ -161,10 +321,10 @@ class DeerPipePlugin(Star):
             JSON result with success status, date, and stats.
         """
         user_id = str(event.get_sender_id())
-        result = await self.llm_tools.deer_self(user_id)
+        result = ToolResult.from_dict(await self.llm_tools.deer_self(user_id))
 
         # 如果打卡成功，发送🦌历图片
-        if result.get("success"):
+        if result.success:
             async for cal_result, is_text in self.service.render_calendar(
                 event, dt.date.today(), self.html_render, user_id=user_id
             ):
@@ -172,7 +332,7 @@ class DeerPipePlugin(Star):
                     event, cal_result, is_text, result, "deer_self"
                 )
 
-        return json.dumps(result, ensure_ascii=False)
+        return json.dumps(result.to_dict(), ensure_ascii=False)
 
     @llm_tool("deer_other")
     async def tool_deer_other(
@@ -192,11 +352,13 @@ class DeerPipePlugin(Star):
         bot_id = str(event.get_self_id()) if event.get_self_id() else None
         # 确保 target_ids 中的 ID 都是字符串
         target_ids = [str(tid) for tid in target_ids]
-        result = await self.llm_tools.deer_other(user_id, target_ids, bot_id)
+        result = ToolResult.from_dict(
+            await self.llm_tools.deer_other(user_id, target_ids, bot_id)
+        )
 
         # 如果帮打卡成功，为第一个成功的用户发送🦌历图片
         # 如果操作者在目标列表中，优先显示操作者的日历
-        if result.get("success") and target_ids:
+        if result.success and target_ids:
             # 优先选择操作者自己的日历（如果操作者在目标列表中）
             display_user_id = user_id if user_id in target_ids else target_ids[0]
             if display_user_id:
@@ -207,7 +369,7 @@ class DeerPipePlugin(Star):
                         event, cal_result, is_text, result, "deer_other"
                     )
 
-        return json.dumps(result, ensure_ascii=False)
+        return json.dumps(result.to_dict(), ensure_ascii=False)
 
     @llm_tool("retro_deer")
     async def tool_retro_deer(
@@ -228,15 +390,17 @@ class DeerPipePlugin(Star):
             JSON result with success status, retroactive date, and daily limit info.
         """
         user_id = str(event.get_sender_id())
-        result = await self.llm_tools.retro_deer(
-            user_id,
-            day,
-            year if year > 0 else None,
-            month if month > 0 else None,
+        result = ToolResult.from_dict(
+            await self.llm_tools.retro_deer(
+                user_id,
+                day,
+                year if year > 0 else None,
+                month if month > 0 else None,
+            )
         )
 
         # 如果补打卡成功，发送🦌历图片
-        if result.get("success"):
+        if result.success:
             async for cal_result, is_text in self.service.render_calendar(
                 event, dt.date.today(), self.html_render, user_id=user_id
             ):
@@ -244,7 +408,7 @@ class DeerPipePlugin(Star):
                     event, cal_result, is_text, result, "retro_deer"
                 )
 
-        return json.dumps(result, ensure_ascii=False)
+        return json.dumps(result.to_dict(), ensure_ascii=False)
 
     @llm_tool("set_allow_help")
     async def tool_set_allow_help(self, event: AstrMessageEvent, allowed: bool) -> str:
@@ -257,8 +421,8 @@ class DeerPipePlugin(Star):
             JSON result with the updated permission setting.
         """
         user_id = str(event.get_sender_id())
-        result = await self.llm_tools.set_allow_help(user_id, allowed)
-        return json.dumps(result, ensure_ascii=False)
+        result = ToolResult.from_dict(await self.llm_tools.set_allow_help(user_id, allowed))
+        return json.dumps(result.to_dict(), ensure_ascii=False)
 
     @llm_tool("get_user_deer_data")
     async def tool_get_user_deer_data(
@@ -286,19 +450,16 @@ class DeerPipePlugin(Star):
         )
         stats_result = await self.llm_tools.get_user_stats(user_id)
 
-        # 合并结果
-        result = {
-            "success": calendar_result.get("success", False)
+        result = ToolResult(
+            success=calendar_result.get("success", False)
             and stats_result.get("success", False),
-            "user_id": user_id,
-            "calendar": calendar_result.get("calendar", {}),
-            "stats": stats_result.get("current_month", {}),
-            "analysis": calendar_result.get("analysis", {}),
-            "user_settings": {
-                "allow_help": stats_result.get("allow_help", True),
-            },
-            "note": "For visual calendar image, use /🦌历 command",
-        }
+            user_id=user_id,
+            calendar=calendar_result.get("calendar", {}),
+            stats=stats_result.get("current_month", {}),
+            analysis=calendar_result.get("analysis", {}),
+            user_settings={"allow_help": stats_result.get("allow_help", True)},
+            note="For visual calendar image, use /🦌历 command",
+        )
 
         # 发送🦌历图片
         if calendar_result.get("success"):
@@ -319,7 +480,7 @@ class DeerPipePlugin(Star):
                     f"Invalid date parameters: year_val={year_val}, month_val={month_val}, exc={exc}"
                 )
 
-        return json.dumps(result, ensure_ascii=False)
+        return json.dumps(result.to_dict(), ensure_ascii=False)
 
     # ==================================================================
     # Command Handlers (英文主命令 + 中文别名)
