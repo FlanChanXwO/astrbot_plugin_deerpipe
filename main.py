@@ -117,6 +117,41 @@ class DeerPipePlugin(Star):
         except Exception as e:
             logger.error(f"[DeerPipe] 移除LLM工具失败: {e}")
 
+    @staticmethod
+    def _append_delivery_warning(
+        result: dict, warning_code: str, exc: Exception
+    ) -> None:
+        result["delivery_warning"] = warning_code
+        result["delivery_error"] = str(exc)
+
+    @staticmethod
+    def _is_send_ack_timeout(exc: Exception) -> bool:
+        msg = str(exc).lower()
+        return "retcode=1200" in msg or "timeout" in msg
+
+    async def _send_calendar_non_fatal(
+        self,
+        event: AstrMessageEvent,
+        cal_result: str,
+        is_text: bool,
+        result: dict,
+        tool_name: str,
+    ) -> None:
+        try:
+            if is_text:
+                await event.send(event.plain_result(cal_result))
+            else:
+                await event.send(event.image_result(cal_result))
+        except Exception as exc:
+            if self._is_send_ack_timeout(exc):
+                logger.info(f"[DeerPipe] {tool_name} calendar send ack timeout: {exc}")
+                self._append_delivery_warning(
+                    result, "SEND_ACK_TIMEOUT_MAY_DELIVERED", exc
+                )
+                return
+            logger.warning(f"[DeerPipe] {tool_name} calendar send failed: {exc}")
+            self._append_delivery_warning(result, "CALENDAR_SEND_FAILED", exc)
+
     # ==================================================================
     # LLM Tools - AI工具函数 (精简版)
     # ==================================================================
@@ -135,10 +170,9 @@ class DeerPipePlugin(Star):
             async for cal_result, is_text in self.service.render_calendar(
                 event, dt.date.today(), self.html_render, user_id=user_id
             ):
-                if is_text:
-                    await event.send(event.plain_result(cal_result))
-                else:
-                    await event.send(event.image_result(cal_result))
+                await self._send_calendar_non_fatal(
+                    event, cal_result, is_text, result, "deer_self"
+                )
 
         return json.dumps(result, ensure_ascii=False)
 
@@ -171,10 +205,9 @@ class DeerPipePlugin(Star):
                 async for cal_result, is_text in self.service.render_calendar(
                     event, dt.date.today(), self.html_render, user_id=display_user_id
                 ):
-                    if is_text:
-                        await event.send(event.plain_result(cal_result))
-                    else:
-                        await event.send(event.image_result(cal_result))
+                    await self._send_calendar_non_fatal(
+                        event, cal_result, is_text, result, "deer_other"
+                    )
 
         return json.dumps(result, ensure_ascii=False)
 
@@ -209,10 +242,9 @@ class DeerPipePlugin(Star):
             async for cal_result, is_text in self.service.render_calendar(
                 event, dt.date.today(), self.html_render, user_id=user_id
             ):
-                if is_text:
-                    await event.send(event.plain_result(cal_result))
-                else:
-                    await event.send(event.image_result(cal_result))
+                await self._send_calendar_non_fatal(
+                    event, cal_result, is_text, result, "retro_deer"
+                )
 
         return json.dumps(result, ensure_ascii=False)
 
@@ -281,10 +313,9 @@ class DeerPipePlugin(Star):
                 async for cal_result, is_text in self.service.render_calendar(
                     event, target_date, self.html_render, user_id=user_id
                 ):
-                    if is_text:
-                        await event.send(event.plain_result(cal_result))
-                    else:
-                        await event.send(event.image_result(cal_result))
+                    await self._send_calendar_non_fatal(
+                        event, cal_result, is_text, result, "get_user_deer_data"
+                    )
             except ValueError as exc:
                 logger.warning(
                     f"Invalid date parameters: year_val={year_val}, month_val={month_val}, exc={exc}"
