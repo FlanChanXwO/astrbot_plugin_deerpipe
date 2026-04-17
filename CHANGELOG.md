@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.0.8] - 2026-04-17
+
+### Fixed
+- **LLM 工具发送状态误判**: 修复帮他人打卡时“日历已发送但工具返回失败”的问题
+  - `deer_self` / `deer_other` / `retro_deer` / `get_user_deer_data` 的日历发送改为非致命流程
+  - 消息发送异常不再中断工具主结果（打卡业务成功不被翻转为失败）
+- **海外环境回执超时误报**: 识别 `retcode=1200` / `timeout` 为“可能已送达”的 ACK 超时场景
+  - 超时场景降级为 info 日志，避免误报为真实发送失败
+  - 工具结果增加 `delivery_warning` / `delivery_error` 字段用于可观测性
+
 ## [1.0.7] - 2026-04-03
 
 ### Fixed
