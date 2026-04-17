@@ -118,7 +118,9 @@ class DeerPipePlugin(Star):
             logger.error(f"[DeerPipe] 移除LLM工具失败: {e}")
 
     @staticmethod
-    def _append_delivery_warning(result: dict, warning_code: str, exc: Exception) -> None:
+    def _append_delivery_warning(
+        result: dict, warning_code: str, exc: Exception
+    ) -> None:
         result["delivery_warning"] = warning_code
         result["delivery_error"] = str(exc)
 
