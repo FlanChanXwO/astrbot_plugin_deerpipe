@@ -494,89 +494,8 @@ class DeerPipePlugin(Star):
                  /deer @someone or /🦌 @用户 (帮他人打卡)
         Returns: 打卡成功消息 + 本月🦌历图片（合并为同一条消息）
         """
-        # 检查是否有 @ 用户
-        messages = event.message_obj.message
-        at_list = [m for m in messages if isinstance(m, At)]
-        at_ids = extract_mention_user_ids(at_list)
-
-        if at_ids:
-            # 帮他人打卡模式 - 统一使用 batch_deer_other
-            if event.get_message_type() != MessageType.GROUP_MESSAGE:
-                yield event.plain_result("该命令仅限群聊使用。")
-                return
-
-            # 禁止帮 bot 自己打卡
-            self_id = event.get_self_id()
-            if self_id and self_id in at_ids:
-                yield event.plain_result("不可以帮 Bot🦌哦~")
-                return
-
-            # 使用批量打卡方法
-            try:
-                results = await self.service.batch_deer_other(
-                    event.get_sender_id(), at_ids, at_list, self_id
-                )
-            except Exception as exc:
-                logger.error(f"deer_cmd help_other failed: {exc}")
-                yield event.plain_result("操作失败，请稍后重试。")
-                return
-
-            # 单人或多人的判断
-            if len(at_ids) == 1:
-                # 单人：输出被帮者的日历图片或失败提示
-                result_data = (
-                    results[0] if results else {"success": False, "reason": "未知错误"}
-                )
-                target_name = result_data["nickname"]
-
-                if not result_data["success"]:
-                    reason = result_data.get("reason", "无法帮🦌")
-                    yield event.plain_result(f"❌ 无法帮 {target_name} 🦌：{reason}")
-                    return
-
-                async for cal_result, is_text in self.service.render_calendar(
-                    event,
-                    dt.date.today(),
-                    self.html_render,
-                    user_id=result_data["user_id"],
-                ):
-                    if is_text:
-                        yield event.plain_result(f"成功帮{target_name}🦌了")
-                        yield event.plain_result(cal_result)
-                    else:
-                        yield (
-                            event.make_result()
-                            .message(f"成功帮{target_name}🦌了")
-                            .url_image(cal_result)
-                        )
-            else:
-                # 多人：使用 batch_report 模板
-                success_count = sum(1 for r in results if r["success"])
-                image_url = await self._render_batch_report(results, success_count)
-                if image_url:
-                    total = len(results)
-                    msg = f"批量帮🦌完成！成功 {success_count}/{total} 人"
-                    yield event.make_result().message(msg).url_image(image_url)
-                else:
-                    # 渲染失败，返回文本结果
-                    lines = [f"批量帮🦌结果（{success_count}/{len(results)} 成功）："]
-                    for r in results:
-                        status = "✅" if r["success"] else "❌"
-                        lines.append(f"{status} {r['nickname']} - 第 {r['count']} 次")
-                    yield event.plain_result("\n".join(lines))
-        else:
-            # 自我打卡模式
-            result = await self.service.handle_deer_self(event)
-            async for cal_result, is_text in self.service.render_calendar(
-                event, dt.date.today(), self.html_render
-            ):
-                if is_text:
-                    # 降级为纯文本时，分开发送
-                    yield event.plain_result(result)
-                    yield event.plain_result(cal_result)
-                else:
-                    # 文字在上，图片在下，合并为同一条消息
-                    yield event.make_result().message(result).url_image(cal_result)
+        async for result in self._run_deer_checkin(event):
+            yield result
 
     @filter.command("允许被鹿", alias={"允许被🦌", "允许被撸", "允许被撸🦌"})
     async def allow_deer(self, event: AstrMessageEvent):
@@ -633,40 +552,8 @@ class DeerPipePlugin(Star):
 
         支持查看自己的日历或 @ 他人的日历。
         """
-        from .utils import extract_mention_user_ids
-
-        messages = event.message_obj.message
-        at_list = [m for m in messages if isinstance(m, At)]
-        at_ids = extract_mention_user_ids(at_list)
-
-        # 构建 user_id -> name 映射
-        at_map = {str(m.qq): m.name for m in at_list if m.name}
-
-        if at_ids:
-            # 查看他人的鹿历
-            # 使用 at_list 保持消息中的顺序，避免 set 无序导致随机选择
-            target_id = str(at_list[0].qq)
-            target_name = at_map.get(target_id, target_id)
-            async for result, is_text in self.service.render_calendar(
-                event, dt.date.today(), self.html_render, user_id=target_id
-            ):
-                if is_text:
-                    yield event.plain_result(f"{target_name} 的鹿历：\n{result}")
-                else:
-                    yield (
-                        event.make_result()
-                        .message(f"{target_name} 的鹿历")
-                        .url_image(result)
-                    )
-        else:
-            # 查看自己的鹿历
-            async for result, is_text in self.service.render_calendar(
-                event, dt.date.today(), self.html_render
-            ):
-                if is_text:
-                    yield event.plain_result(result)
-                else:
-                    yield event.image_result(result)
+        async for result in self._run_calendar_query(event, dt.date.today(), "calendar"):
+            yield result
 
     @filter.command(
         "last_month_calendar", alias={"上月鹿历", "上月🦌历", "上月撸历", "上月撸🦌历"}
@@ -676,43 +563,17 @@ class DeerPipePlugin(Star):
 
         支持查看自己的上月日历或 @ 他人的上月日历。
         """
-        from .utils import extract_mention_user_ids
-
-        messages = event.message_obj.message
-        at_list = [m for m in messages if isinstance(m, At)]
-        at_ids = extract_mention_user_ids(at_list)
-
-        # 构建 user_id -> name 映射
-        at_map = {str(m.qq): m.name for m in at_list if m.name}
-
         first = dt.date.today().replace(day=1)
         last_month = (first - dt.timedelta(days=1)).replace(day=1)
 
-        if at_ids:
-            # 查看他人的上月鹿历
-            # 使用 at_list 保持消息中的顺序，避免 set 无序导致随机选择
-            target_id = str(at_list[0].qq)
-            target_name = at_map.get(target_id, target_id)
-            async for result, is_text in self.service.render_calendar(
-                event, last_month, self.html_render, user_id=target_id
-            ):
-                if is_text:
-                    yield event.plain_result(f"{target_name} 的上月鹿历：\n{result}")
-                else:
-                    yield (
-                        event.make_result()
-                        .message(f"📅 {target_name} 的上月鹿历")
-                        .url_image(result)
-                    )
-        else:
-            # 查看自己的上月鹿历
-            async for result, is_text in self.service.render_calendar(
-                event, last_month, self.html_render
-            ):
-                if is_text:
-                    yield event.plain_result(result)
-                else:
-                    yield event.make_result().message("📅 上月鹿历").url_image(result)
+        async for result in self._run_calendar_query(
+            event,
+            last_month,
+            "last_month_calendar",
+            self_title="📅 上月鹿历",
+            other_title_suffix="的上月鹿历",
+        ):
+            yield result
 
     # ==================================================================
     # Data export/import commands (管理员命令，不是LLM工具)
@@ -924,34 +785,32 @@ class DeerPipePlugin(Star):
                 return comp.text.strip().startswith("/")
         return False
 
-    # ==================================================================
-    # Plain message handlers (without / prefix)
-    # ==================================================================
+    def _mark_deer_event_handled(self, event: AstrMessageEvent, key: str) -> bool:
+        """Mark deer flow as handled for this event."""
+        extra_key = f"deerpipe_{key}_handled"
+        if event.get_extra(extra_key):
+            return False
+        event.set_extra(extra_key, True)
+        return True
 
-    @filter.regex(r"^(?!/)(🦌|鹿|撸|撸🦌)(?!历)")
-    async def plain_deer_merged_cmd(self, event: AstrMessageEvent):
-        # Skip explicit slash commands to avoid duplicate trigger with @filter.command.
-        if self._is_explicit_slash_command(event):
+    async def _run_deer_checkin(self, event: AstrMessageEvent):
+        if not self._mark_deer_event_handled(event, "deer"):
             return
 
-        # 检查是否有 @ 用户
         messages = event.message_obj.message
         at_list = [m for m in messages if isinstance(m, At)]
         at_ids = extract_mention_user_ids(at_list)
 
         if at_ids:
-            # 帮他人打卡模式 - 统一使用 batch_deer_other
             if event.get_message_type() != MessageType.GROUP_MESSAGE:
                 yield event.plain_result("该命令仅限群聊使用。")
                 return
 
-            # 禁止帮 bot 自己打卡
             self_id = event.get_self_id()
             if self_id and self_id in at_ids:
                 yield event.plain_result("不可以帮 Bot🦌哦~")
                 return
 
-            # 使用批量打卡方法
             try:
                 results = await self.service.batch_deer_other(
                     event.get_sender_id(), at_ids, at_list, self_id
@@ -961,9 +820,7 @@ class DeerPipePlugin(Star):
                 yield event.plain_result("操作失败，请稍后重试。")
                 return
 
-            # 单人或多人的判断
             if len(at_ids) == 1:
-                # 单人：输出被帮者的日历图片或失败提示
                 result_data = (
                     results[0] if results else {"success": False, "reason": "未知错误"}
                 )
@@ -989,34 +846,87 @@ class DeerPipePlugin(Star):
                             .message(f"成功帮{target_name}🦌了")
                             .url_image(cal_result)
                         )
+                return
+
+            success_count = sum(1 for r in results if r["success"])
+            image_url = await self._render_batch_report(results, success_count)
+            if image_url:
+                total = len(results)
+                msg = f"批量帮🦌完成！成功 {success_count}/{total} 人"
+                yield event.make_result().message(msg).url_image(image_url)
             else:
-                # 多人：使用 batch_report 模板
-                success_count = sum(1 for r in results if r["success"])
-                image_url = await self._render_batch_report(results, success_count)
-                if image_url:
-                    total = len(results)
-                    msg = f"批量帮🦌完成！成功 {success_count}/{total} 人"
-                    yield event.make_result().message(msg).url_image(image_url)
-                else:
-                    # 渲染失败，返回文本结果
-                    lines = [f"批量帮🦌结果（{success_count}/{len(results)} 成功）："]
-                    for r in results:
-                        status = "✅" if r["success"] else "❌"
-                        lines.append(f"{status} {r['nickname']} - 第 {r['count']} 次")
-                    yield event.plain_result("\n".join(lines))
-        else:
-            # 自我打卡模式
-            result = await self.service.handle_deer_self(event)
-            async for cal_result, is_text in self.service.render_calendar(
-                event, dt.date.today(), self.html_render
+                lines = [f"批量帮🦌结果（{success_count}/{len(results)} 成功）："]
+                for r in results:
+                    status = "✅" if r["success"] else "❌"
+                    lines.append(f"{status} {r['nickname']} - 第 {r['count']} 次")
+                yield event.plain_result("\n".join(lines))
+            return
+
+        result = await self.service.handle_deer_self(event)
+        async for cal_result, is_text in self.service.render_calendar(
+            event, dt.date.today(), self.html_render
+        ):
+            if is_text:
+                yield event.plain_result(result)
+                yield event.plain_result(cal_result)
+            else:
+                yield event.make_result().message(result).url_image(cal_result)
+
+    async def _run_calendar_query(
+        self,
+        event: AstrMessageEvent,
+        month_date: dt.date,
+        dedup_key: str,
+        self_title: str | None = None,
+        other_title_suffix: str = "的鹿历",
+    ):
+        if not self._mark_deer_event_handled(event, dedup_key):
+            return
+
+        messages = event.message_obj.message
+        at_list = [m for m in messages if isinstance(m, At)]
+        at_ids = extract_mention_user_ids(at_list)
+        at_map = {str(m.qq): m.name for m in at_list if m.name}
+
+        if at_ids:
+            target_id = str(at_list[0].qq)
+            target_name = at_map.get(target_id, target_id)
+            async for result, is_text in self.service.render_calendar(
+                event, month_date, self.html_render, user_id=target_id
             ):
                 if is_text:
-                    # 降级为纯文本时，分开发送
-                    yield event.plain_result(result)
-                    yield event.plain_result(cal_result)
+                    yield event.plain_result(f"{target_name} {other_title_suffix}：\n{result}")
                 else:
-                    # 文字在上，图片在下，合并为同一条消息
-                    yield event.make_result().message(result).url_image(cal_result)
+                    yield (
+                        event.make_result()
+                        .message(f"{target_name} {other_title_suffix}")
+                        .url_image(result)
+                    )
+            return
+
+        async for result, is_text in self.service.render_calendar(
+            event, month_date, self.html_render
+        ):
+            if is_text:
+                prefix = f"{self_title}\n" if self_title else ""
+                yield event.plain_result(f"{prefix}{result}")
+            elif self_title:
+                yield event.make_result().message(self_title).url_image(result)
+            else:
+                yield event.image_result(result)
+
+    # ==================================================================
+    # Plain message handlers (without / prefix)
+    # ==================================================================
+
+    @filter.regex(r"^(?!/)(🦌|鹿|撸|撸🦌)(?!历)")
+    async def plain_deer_merged_cmd(self, event: AstrMessageEvent):
+        # Skip explicit slash commands to avoid duplicate trigger with @filter.command.
+        if self._is_explicit_slash_command(event):
+            return
+
+        async for result in self._run_deer_checkin(event):
+            yield result
 
     @filter.regex(r"^(?!/)🦌历$")
     async def plain_deer_calendar_cmd(self, event: AstrMessageEvent):
@@ -1024,40 +934,8 @@ class DeerPipePlugin(Star):
         if self._is_explicit_slash_command(event):
             return
 
-        # 处理纯 🦌历 消息（不带/前缀）
-        from .utils import extract_mention_user_ids
-
-        messages = event.message_obj.message
-        at_list = [m for m in messages if isinstance(m, At)]
-        at_ids = extract_mention_user_ids(at_list)
-
-        # 构建 user_id -> name 映射
-        at_map = {str(m.qq): m.name for m in at_list if m.name}
-
-        if at_ids:
-            # 查看他人的鹿历
-            target_id = str(at_list[0].qq)
-            target_name = at_map.get(target_id, target_id)
-            async for result, is_text in self.service.render_calendar(
-                event, dt.date.today(), self.html_render, user_id=target_id
-            ):
-                if is_text:
-                    yield event.plain_result(f"{target_name} 的鹿历：\n{result}")
-                else:
-                    yield (
-                        event.make_result()
-                        .message(f"{target_name} 的鹿历")
-                        .url_image(result)
-                    )
-        else:
-            # 查看自己的鹿历
-            async for result, is_text in self.service.render_calendar(
-                event, dt.date.today(), self.html_render
-            ):
-                if is_text:
-                    yield event.plain_result(result)
-                else:
-                    yield event.image_result(result)
+        async for result in self._run_calendar_query(event, dt.date.today(), "calendar"):
+            yield result
 
     @filter.regex(r"^(?!/)上月🦌历$")
     async def plain_last_month_calendar_cmd(self, event: AstrMessageEvent):
@@ -1065,43 +943,17 @@ class DeerPipePlugin(Star):
         if self._is_explicit_slash_command(event):
             return
 
-        # 处理纯 上月🦌历 消息（不带/前缀）
-        from .utils import extract_mention_user_ids
-
-        messages = event.message_obj.message
-        at_list = [m for m in messages if isinstance(m, At)]
-        at_ids = extract_mention_user_ids(at_list)
-
-        # 构建 user_id -> name 映射
-        at_map = {str(m.qq): m.name for m in at_list if m.name}
-
         first = dt.date.today().replace(day=1)
         last_month = (first - dt.timedelta(days=1)).replace(day=1)
 
-        if at_ids:
-            # 查看他人的上月鹿历
-            target_id = str(at_list[0].qq)
-            target_name = at_map.get(target_id, target_id)
-            async for result, is_text in self.service.render_calendar(
-                event, last_month, self.html_render, user_id=target_id
-            ):
-                if is_text:
-                    yield event.plain_result(f"{target_name} 的上月鹿历：\n{result}")
-                else:
-                    yield (
-                        event.make_result()
-                        .message(f"📅 {target_name} 的上月鹿历")
-                        .url_image(result)
-                    )
-        else:
-            # 查看自己的上月鹿历
-            async for result, is_text in self.service.render_calendar(
-                event, last_month, self.html_render
-            ):
-                if is_text:
-                    yield event.plain_result(result)
-                else:
-                    yield event.make_result().message("📅 上月鹿历").url_image(result)
+        async for result in self._run_calendar_query(
+            event,
+            last_month,
+            "last_month_calendar",
+            self_title="📅 上月鹿历",
+            other_title_suffix="的上月鹿历",
+        ):
+            yield result
 
     async def _render_batch_report(
         self, results: list[dict], success_count: int
