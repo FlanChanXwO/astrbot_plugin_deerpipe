@@ -88,7 +88,9 @@ class ToolResult:
 
         return cls(
             success=bool(data.get("success", False)),
-            user_id=data.get("user_id") if isinstance(data.get("user_id"), str) else None,
+            user_id=data.get("user_id")
+            if isinstance(data.get("user_id"), str)
+            else None,
             date=data.get("date") if isinstance(data.get("date"), str) else None,
             target_date=(
                 data.get("target_date")
@@ -112,7 +114,9 @@ class ToolResult:
                 data.get("message") if isinstance(data.get("message"), str) else None
             ),
             error=data.get("error") if isinstance(data.get("error"), str) else None,
-            reasons=data.get("reasons") if isinstance(data.get("reasons"), list) else [],
+            reasons=data.get("reasons")
+            if isinstance(data.get("reasons"), list)
+            else [],
             result=data.get("result") if isinstance(data.get("result"), list) else [],
             delivery_warning=(
                 data.get("delivery_warning")
@@ -134,7 +138,9 @@ class ToolResult:
             self.delivery_warning = warning_code
         if self.delivery_error is None:
             self.delivery_error = error_text
-        self.delivery_warnings.append(DeliveryWarning(code=warning_code, error=error_text))
+        self.delivery_warnings.append(
+            DeliveryWarning(code=warning_code, error=error_text)
+        )
 
     def to_dict(self) -> dict[str, Any]:
         data: dict[str, Any] = {
@@ -421,7 +427,9 @@ class DeerPipePlugin(Star):
             JSON result with the updated permission setting.
         """
         user_id = str(event.get_sender_id())
-        result = ToolResult.from_dict(await self.llm_tools.set_allow_help(user_id, allowed))
+        result = ToolResult.from_dict(
+            await self.llm_tools.set_allow_help(user_id, allowed)
+        )
         return json.dumps(result.to_dict(), ensure_ascii=False)
 
     @llm_tool("get_user_deer_data")
@@ -552,7 +560,9 @@ class DeerPipePlugin(Star):
 
         支持查看自己的日历或 @ 他人的日历。
         """
-        async for result in self._run_calendar_query(event, dt.date.today(), "calendar"):
+        async for result in self._run_calendar_query(
+            event, dt.date.today(), "calendar"
+        ):
             yield result
 
     @filter.command(
@@ -895,7 +905,9 @@ class DeerPipePlugin(Star):
                 event, month_date, self.html_render, user_id=target_id
             ):
                 if is_text:
-                    yield event.plain_result(f"{target_name} {other_title_suffix}：\n{result}")
+                    yield event.plain_result(
+                        f"{target_name} {other_title_suffix}：\n{result}"
+                    )
                 else:
                     yield (
                         event.make_result()
@@ -934,7 +946,9 @@ class DeerPipePlugin(Star):
         if self._is_explicit_slash_command(event):
             return
 
-        async for result in self._run_calendar_query(event, dt.date.today(), "calendar"):
+        async for result in self._run_calendar_query(
+            event, dt.date.today(), "calendar"
+        ):
             yield result
 
     @filter.regex(r"^(?!/)上月🦌历$")
