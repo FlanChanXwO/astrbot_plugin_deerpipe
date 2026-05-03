@@ -66,5 +66,29 @@
         "default": true
       }
     }
+  },
+  "rendering": {
+    "description": "渲染引擎设置",
+    "type": "object",
+    "hint": "配置 HTML 图片渲染方式",
+    "items": {
+      "use_t2i": {
+        "description": "使用 AstrBot 内置图片渲染",
+        "type": "bool",
+        "default": false,
+        "hint": "开启后使用 AstrBot 内置的 t2i 服务渲染图片，无需安装 Playwright"
+      },
+      "jpeg_quality": {
+        "description": "JPEG 图片质量",
+        "type": "int",
+        "slider": {
+          "min": 50,
+          "max": 100,
+          "step": 5
+        },
+        "default": 95,
+        "hint": "Playwright 渲染时 JPEG 图片的质量 (1-100)，数值越高质量越好但文件越大"
+      }
+    }
   }
 }
