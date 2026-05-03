@@ -1,0 +1,174 @@
+"""DeerPipe plugin source package.
+
+采用 DDD 分层架构：
+- domain: 领域层（实体、值对象、领域服务、异常）
+- application: 应用层（用例、应用服务、DTO）
+- infrastructure: 基础设施层（数据库、渲染、工具）
+- shared: 共享层（常量、工具）
+"""
+
+# Shared layer (constants)
+from .shared import (
+    AVATAR_CACHE_MAX_SIZE,
+    AVATAR_CACHE_TTL,
+    CALENDAR_IMAGE_WIDTH,
+    CHARACTER_RANGE_HIGH,
+    CHARACTER_RANGE_LOW,
+    CHARACTER_RANGE_MEDIUM,
+    CHARACTER_THRESHOLD_HIGH,
+    CHARACTER_THRESHOLD_MEDIUM,
+    DEFAULT_COUNT_DISPLAY_MODE,
+    DEFAULT_DAILY_RETRO_LIMIT,
+    DEFAULT_SHOW_CHECK_MARK,
+    HTTP_TIMEOUT_SECONDS,
+    IMPORT_SESSION_TIMEOUT,
+    LLM_TOOL_DEER_OTHER,
+    LLM_TOOL_DEER_SELF,
+    LLM_TOOL_GET_USER_DEER_DATA,
+    LLM_TOOL_RETRO_DEER,
+    LLM_TOOL_SET_ALLOW_HELP,
+    LLM_TOOLS,
+    MAX_FONT_SIZE,
+    MAX_IMPORT_FILE_SIZE,
+    PLATFORM_AIOCQHTTP,
+    QQ_AVATAR_URL_TEMPLATE,
+    TEMPLATE_CALENDAR_LOAD_FAILED,
+    TEMPLATE_DEER_PAST_LIMIT,
+    TEMPLATE_DEER_PAST_SUCCESS,
+    TEMPLATE_FALLBACK_CALENDAR_HEADER,
+    TEMPLATE_FALLBACK_CALENDAR_STATS,
+    TEMPLATE_GROUP_ONLY,
+    TEMPLATE_OPERATION_FAILED,
+)
+
+# Domain layer
+from .domain import (
+    # Entities
+    CalendarAssets,
+    CalendarDay,
+    CalendarPayload,
+    # Exceptions
+    ConfigurationError,
+    DatabaseError,
+    DataExportError,
+    DataImportError,
+    DeerPipeError,
+    DeerRecord,
+    MonthStats,
+    PermissionError,
+    RateLimitError,
+    RenderError,
+    TemplateKeyError,
+    UserConfig,
+    ValidationError,
+)
+
+# Infrastructure layer
+from .infrastructure import (
+    CalendarRenderer,
+    DatabaseManager,
+    DeerPipeHTMLRenderer,
+    close_aiohttp_session,
+    extract_mention_user_ids,
+    fetch_avatar_base64,
+    get_html_renderer,
+    get_logger,
+    image_to_data_uri,
+    logger,
+    normalize_user_id,
+    parse_allow_flag,
+    reset_html_renderer,
+    validate_day,
+)
+
+# Application layer
+from .application import (
+    AdminCommandHandler,
+    CalendarCommandHandler,
+    CommandHandler,
+    DataCommandHandler,
+    DataManager,
+    DeerCommandHandler,
+    DeerPipeLLMTools,
+    DeerPipeService,
+    LeaderboardCommandHandler,
+    MessageTemplates,
+)
+
+__all__ = [
+    # Shared - Constants
+    "AVATAR_CACHE_MAX_SIZE",
+    "AVATAR_CACHE_TTL",
+    "CALENDAR_IMAGE_WIDTH",
+    "CHARACTER_RANGE_HIGH",
+    "CHARACTER_RANGE_LOW",
+    "CHARACTER_RANGE_MEDIUM",
+    "CHARACTER_THRESHOLD_HIGH",
+    "CHARACTER_THRESHOLD_MEDIUM",
+    "DEFAULT_COUNT_DISPLAY_MODE",
+    "DEFAULT_DAILY_RETRO_LIMIT",
+    "DEFAULT_SHOW_CHECK_MARK",
+    "HTTP_TIMEOUT_SECONDS",
+    "IMPORT_SESSION_TIMEOUT",
+    "LLM_TOOLS",
+    "LLM_TOOL_DEER_OTHER",
+    "LLM_TOOL_DEER_SELF",
+    "LLM_TOOL_GET_USER_DEER_DATA",
+    "LLM_TOOL_RETRO_DEER",
+    "LLM_TOOL_SET_ALLOW_HELP",
+    "MAX_FONT_SIZE",
+    "MAX_IMPORT_FILE_SIZE",
+    "PLATFORM_AIOCQHTTP",
+    "QQ_AVATAR_URL_TEMPLATE",
+    "TEMPLATE_CALENDAR_LOAD_FAILED",
+    "TEMPLATE_DEER_PAST_LIMIT",
+    "TEMPLATE_DEER_PAST_SUCCESS",
+    "TEMPLATE_FALLBACK_CALENDAR_HEADER",
+    "TEMPLATE_FALLBACK_CALENDAR_STATS",
+    "TEMPLATE_GROUP_ONLY",
+    "TEMPLATE_OPERATION_FAILED",
+    # Domain - Entities
+    "CalendarAssets",
+    "CalendarDay",
+    "CalendarPayload",
+    "DeerRecord",
+    "MonthStats",
+    "UserConfig",
+    # Domain - Exceptions
+    "ConfigurationError",
+    "DataExportError",
+    "DataImportError",
+    "DatabaseError",
+    "DeerPipeError",
+    "PermissionError",
+    "RateLimitError",
+    "RenderError",
+    "TemplateKeyError",
+    "ValidationError",
+    # Application
+    "AdminCommandHandler",
+    "CalendarCommandHandler",
+    "CommandHandler",
+    "DataCommandHandler",
+    "DataManager",
+    "DeerCommandHandler",
+    "DeerPipeLLMTools",
+    "DeerPipeService",
+    "LeaderboardCommandHandler",
+    "MessageTemplates",
+    # Infrastructure
+    "CalendarRenderer",
+    "DatabaseManager",
+    "DeerPipeHTMLRenderer",
+    "close_aiohttp_session",
+    "extract_mention_user_ids",
+    "fetch_avatar_base64",
+    "get_html_renderer",
+    "get_logger",
+    "image_to_data_uri",
+    "logger",
+    "normalize_user_id",
+    "parse_allow_flag",
+    "reset_html_renderer",
+    "validate_day",
+]
