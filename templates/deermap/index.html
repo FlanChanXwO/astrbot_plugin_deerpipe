@@ -25,10 +25,16 @@
 
     <div class="heatmap-wrapper">
         <div class="heatmap">
-            <!-- Month labels -->
+            <!-- Month labels - 每周显示对应月份 -->
             <div class="month-labels">
-                {% for month in months %}
-                <div class="month-label">{{ month }}</div>
+                {% for week_idx in range(weeks|length) %}
+                    {% set prev_month = week_to_month[week_idx - 1] if week_idx > 0 else -1 %}
+                    {% set curr_month = week_to_month[week_idx] %}
+                    {% if curr_month != prev_month %}
+                        <div class="month-label">{{ months[curr_month] }}</div>
+                    {% else %}
+                        <div class="month-spacer"></div>
+                    {% endif %}
                 {% endfor %}
             </div>
 

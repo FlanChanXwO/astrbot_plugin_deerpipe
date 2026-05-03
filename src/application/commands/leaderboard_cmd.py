@@ -487,7 +487,7 @@ class LeaderboardCommandHandler:
                 css_content = self.deermap_css.read_text(encoding="utf-8")
 
             # 构建热力图数据
-            weeks_data, months = self._build_deermap_data(stats_data, year)
+            weeks_data, months, month_start_indices, week_to_month = self._build_deermap_data(stats_data, year)
 
             # 计算统计信息
             total_days = len(stats_data)
@@ -514,6 +514,7 @@ class LeaderboardCommandHandler:
                 "title": f"{year}年鹿力图",
                 "year": year,
                 "months": months,
+                "week_to_month": week_to_month,
                 "weeks": weeks_data,
                 "total_days": total_days,
                 "total_count": total_count,
@@ -544,7 +545,7 @@ class LeaderboardCommandHandler:
     @staticmethod
     def _build_deermap_data(
             stats_data: dict[str, int], year: int
-    ) -> tuple[list[list[dict]], list[str]]:
+    ) -> tuple[list[list[dict]], list[str], list[int], list[int]]:
         """构建鹿力图数据.
 
         Args:
@@ -552,7 +553,7 @@ class LeaderboardCommandHandler:
             year: 年份
 
         Returns:
-            (weeks_data, months) 周数据和月份标签
+            (weeks_data, months, month_start_indices, week_to_month) 周数据、月份名称列表、每月起始周索引、每周所属月份索引
         """
         import calendar
 
@@ -580,60 +581,36 @@ class LeaderboardCommandHandler:
         weeks_data: list[list[dict]] = []
         cal = calendar.Calendar(firstweekday=0)  # 周一为第一天
 
-        # 获取该年的所有周
-        year_weeks: list[list[int]] = []
-        for month in range(1, 13):
-            for week in cal.monthdayscalendar(year, month):
-                if any(day != 0 for day in week):
-                    year_weeks.append(week)
+        # 按周组织数据，同时记录每月开始的周索引和每周对应的月份
+        week_index = 0
+        month_start_indices: list[int] = []
+        week_to_month: list[int] = []  # 每周对应的月份索引(0-11)
 
-        # 按周组织数据
         for month in range(1, 13):
+            month_start_indices.append(week_index)
             for week in cal.monthdayscalendar(year, month):
                 if all(day == 0 for day in week):
                     continue
 
+                week_to_month.append(month - 1)  # 记录该周属于哪个月
+
                 week_data: list[dict] = []
                 for weekday, day in enumerate(week):
                     if day == 0:
-                        # 填充空位
-                        week_data.append(
-                            {
-                                "date": "",
-                                "count": 0,
-                                "level": "level-0",
-                            }
-                        )
+                        week_data.append({"date": "", "count": 0, "level": "level-0"})
                     else:
                         date_key = f"{year}-{month:02d}-{day:02d}"
                         count = stats_data.get(date_key, 0)
-                        week_data.append(
-                            {
-                                "date": date_key,
-                                "count": count,
-                                "level": get_level(count),
-                            }
-                        )
+                        week_data.append({"date": date_key, "count": count, "level": get_level(count)})
 
                 weeks_data.append(week_data)
+                week_index += 1
 
-        # 月份标签（用于顶部显示）
-        months = [
-            "1月",
-            "2月",
-            "3月",
-            "4月",
-            "5月",
-            "6月",
-            "7月",
-            "8月",
-            "9月",
-            "10月",
-            "11月",
-            "12月",
-        ]
+        # 月份名称
+        month_names = ["1月", "2月", "3月", "4月", "5月", "6月",
+                       "7月", "8月", "9月", "10月", "11月", "12月"]
 
-        return weeks_data, months
+        return weeks_data, month_names, month_start_indices, week_to_month
 
     @staticmethod
     def _format_deermap_text(stats_data: dict[str, int], year: int) -> str:
