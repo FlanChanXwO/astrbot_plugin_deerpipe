@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1020, initial-scale=1.0"/>
+    <style>{{ css_style | safe }}</style>
+    <title>群鹿排行榜</title>
+</head>
+<body>
+<div class="leaderboard-container">
+    <div class="header">
+        <div class="header-icon">🏆</div>
+        <div class="header-content">
+            <div class="title">{{ title }}</div>
+            <div class="subtitle">{{ date_str }}</div>
+        </div>
+        <div class="header-deco">🦌</div>
+    </div>
+
+    <div class="podium">
+        {% if leaderboard|length >= 2 %}
+        <div class="podium-item second">
+            <div class="podium-avatar">🥈</div>
+            <div class="podium-name">{{ leaderboard[1].name }}</div>
+            <div class="podium-count">{{ leaderboard[1].count }}次</div>
+        </div>
+        {% endif %}
+        {% if leaderboard|length >= 1 %}
+        <div class="podium-item first">
+            <div class="crown">👑</div>
+            <div class="podium-avatar">🥇</div>
+            <div class="podium-name">{{ leaderboard[0].name }}</div>
+            <div class="podium-count">{{ leaderboard[0].count }}次</div>
+        </div>
+        {% endif %}
+        {% if leaderboard|length >= 3 %}
+        <div class="podium-item third">
+            <div class="podium-avatar">🥉</div>
+            <div class="podium-name">{{ leaderboard[2].name }}</div>
+            <div class="podium-count">{{ leaderboard[2].count }}次</div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="list-container">
+        {% for item in leaderboard %}
+            {% if loop.index > 3 %}
+            <div class="list-row">
+                <div class="rank">{{ loop.index }}</div>
+                <div class="name">{{ item.name }}</div>
+                <div class="count">
+                    <span class="count-value">{{ item.count }}</span>
+                    <span class="count-unit">次</span>
+                </div>
+            </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+
+    <div class="summary">
+        <div class="summary-item">
+            <span class="label">参与人数</span>
+            <span class="value">{{ total_users }}</span>
+        </div>
+        <div class="summary-item highlight">
+            <span class="label">总打卡</span>
+            <span class="value">{{ total_count }}</span>
+        </div>
+    </div>
+
+    {% if current_user %}
+    <div class="current-user">
+        <div class="current-user-divider"></div>
+        <div class="current-user-info">
+            {% if current_user.on_leaderboard %}
+            <div class="current-user-rank">第 {{ current_user.rank }} 名</div>
+            {% else %}
+            <div class="current-user-rank not-ranked">未上榜</div>
+            {% endif %}
+            <div class="current-user-count">{{ current_user.count }} 次</div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+</body>
+</html>

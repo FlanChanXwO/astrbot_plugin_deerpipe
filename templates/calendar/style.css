@@ -1,6 +1,7 @@
 html, body {
     margin: 0;
     padding: 0;
+    width: 1020px;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
