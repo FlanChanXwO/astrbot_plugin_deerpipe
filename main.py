@@ -1,192 +1,46 @@
+"""DeerPipe plugin entry point.
+
+鹿管打卡插件主模块，使用命令模式重构以简化代码结构。
+"""
+
 from __future__ import annotations
 
-import asyncio
 import datetime as dt
 import json
-import os
-import tempfile
-import time
-from dataclasses import dataclass, field
+from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import Any
 
-from astrbot.api import llm_tool, logger
+from astrbot.api import llm_tool
 from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.provider import ProviderRequest
 from astrbot.api.star import Context, Star, StarTools
 from astrbot.core import AstrBotConfig
-from astrbot.core.message.components import At, File, Plain
-from astrbot.core.platform.message_type import MessageType
+from astrbot.core.message.components import Plain
 
-from .data_manager import DataManager
-from .database import DatabaseManager
-from .llm_tools import DeerPipeLLMTools
-from .renderer import CalendarRenderer
-from .service import DeerPipeService
-from .utils import close_aiohttp_session, extract_mention_user_ids
+from .src import (
+    LLM_TOOLS,
+    AdminCommandHandler,
+    CalendarCommandHandler,
+    CalendarRenderer,
+    DatabaseManager,
+    DataCommandHandler,
+    DataManager,
+    DeerCommandHandler,
+    DeerPipeHTMLRenderer,
+    DeerPipeLLMTools,
+    DeerPipeService,
+    LeaderboardCommandHandler,
+    close_aiohttp_session,
+    get_logger,
+)
+from .src.domain.datamodels import ToolResult
 
-
-@dataclass
-class DeliveryWarning:
-    code: str
-    error: str
-
-
-@dataclass
-class ToolResult:
-    success: bool = False
-    user_id: str | None = None
-    date: str | None = None
-    target_date: str | None = None
-    stats: dict[str, Any] = field(default_factory=dict)
-    calendar: dict[str, Any] = field(default_factory=dict)
-    analysis: dict[str, Any] = field(default_factory=dict)
-    user_settings: dict[str, Any] = field(default_factory=dict)
-    note: str | None = None
-    message: str | None = None
-    error: str | None = None
-    reasons: list[Any] = field(default_factory=list)
-    result: list[Any] = field(default_factory=list)
-    delivery_warning: str | None = None
-    delivery_error: str | None = None
-    delivery_warnings: list[DeliveryWarning] = field(default_factory=list)
-    extra: dict[str, Any] = field(default_factory=dict)
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "ToolResult":
-        warnings_raw = data.get("delivery_warnings", [])
-        warnings: list[DeliveryWarning] = []
-        if isinstance(warnings_raw, list):
-            for item in warnings_raw:
-                if not isinstance(item, dict):
-                    continue
-                code = item.get("code")
-                error = item.get("error")
-                if isinstance(code, str) and isinstance(error, str):
-                    warnings.append(DeliveryWarning(code=code, error=error))
-
-        known_keys = {
-            "success",
-            "user_id",
-            "date",
-            "target_date",
-            "stats",
-            "calendar",
-            "analysis",
-            "user_settings",
-            "note",
-            "message",
-            "error",
-            "reasons",
-            "result",
-            "delivery_warning",
-            "delivery_error",
-            "delivery_warnings",
-        }
-
-        extra = {k: v for k, v in data.items() if k not in known_keys}
-
-        return cls(
-            success=bool(data.get("success", False)),
-            user_id=data.get("user_id") if isinstance(data.get("user_id"), str) else None,
-            date=data.get("date") if isinstance(data.get("date"), str) else None,
-            target_date=(
-                data.get("target_date")
-                if isinstance(data.get("target_date"), str)
-                else None
-            ),
-            stats=data.get("stats") if isinstance(data.get("stats"), dict) else {},
-            calendar=(
-                data.get("calendar") if isinstance(data.get("calendar"), dict) else {}
-            ),
-            analysis=(
-                data.get("analysis") if isinstance(data.get("analysis"), dict) else {}
-            ),
-            user_settings=(
-                data.get("user_settings")
-                if isinstance(data.get("user_settings"), dict)
-                else {}
-            ),
-            note=data.get("note") if isinstance(data.get("note"), str) else None,
-            message=(
-                data.get("message") if isinstance(data.get("message"), str) else None
-            ),
-            error=data.get("error") if isinstance(data.get("error"), str) else None,
-            reasons=data.get("reasons") if isinstance(data.get("reasons"), list) else [],
-            result=data.get("result") if isinstance(data.get("result"), list) else [],
-            delivery_warning=(
-                data.get("delivery_warning")
-                if isinstance(data.get("delivery_warning"), str)
-                else None
-            ),
-            delivery_error=(
-                data.get("delivery_error")
-                if isinstance(data.get("delivery_error"), str)
-                else None
-            ),
-            delivery_warnings=warnings,
-            extra=extra,
-        )
-
-    def append_delivery_warning(self, warning_code: str, exc: Exception) -> None:
-        error_text = str(exc)
-        if self.delivery_warning is None:
-            self.delivery_warning = warning_code
-        if self.delivery_error is None:
-            self.delivery_error = error_text
-        self.delivery_warnings.append(DeliveryWarning(code=warning_code, error=error_text))
-
-    def to_dict(self) -> dict[str, Any]:
-        data: dict[str, Any] = {
-            "success": self.success,
-        }
-        if self.user_id is not None:
-            data["user_id"] = self.user_id
-        if self.date is not None:
-            data["date"] = self.date
-        if self.target_date is not None:
-            data["target_date"] = self.target_date
-        if self.stats:
-            data["stats"] = self.stats
-        if self.calendar:
-            data["calendar"] = self.calendar
-        if self.analysis:
-            data["analysis"] = self.analysis
-        if self.user_settings:
-            data["user_settings"] = self.user_settings
-        if self.note is not None:
-            data["note"] = self.note
-        if self.message is not None:
-            data["message"] = self.message
-        if self.error is not None:
-            data["error"] = self.error
-        if self.reasons:
-            data["reasons"] = self.reasons
-        if self.result:
-            data["result"] = self.result
-        if self.delivery_warning is not None:
-            data["delivery_warning"] = self.delivery_warning
-        if self.delivery_error is not None:
-            data["delivery_error"] = self.delivery_error
-        if self.delivery_warnings:
-            data["delivery_warnings"] = [
-                {"code": w.code, "error": w.error} for w in self.delivery_warnings
-            ]
-        data.update(self.extra)
-        return data
+logger = get_logger()
 
 
 class DeerPipePlugin(Star):
     """Deer-pipe daily check-in plugin with SQLite persistence."""
-
-    # 工具函数名称列表，用于卸载时移除
-    LLM_TOOLS = [
-        "deer_self",
-        "deer_other",
-        "retro_deer",
-        "set_allow_help",
-        "get_user_deer_data",
-    ]
 
     def __init__(self, context: Context, config: AstrBotConfig) -> None:
         """Initialize the plugin."""
@@ -208,10 +62,29 @@ class DeerPipePlugin(Star):
             self.db, self.data_manager, self.service, self.config
         )
 
-        # 导入会话状态管理（实例级，避免跨实例共享）
-        self._import_session_lock = asyncio.Lock()
-        self._import_sessions: dict[str, float] = {}
-        self._import_session_timeout = 300  # 5分钟超时
+        # 初始化命令处理器（轻量级，直接传入所需依赖）
+        self.deer_handler = DeerCommandHandler(self.service)
+        self.calendar_handler = CalendarCommandHandler(self.service)
+        self.admin_handler = AdminCommandHandler(self.service)
+        self.data_handler = DataCommandHandler(self.data_manager)
+        self.base_dir = Path(__file__).parent
+        self.leaderboard_handler = LeaderboardCommandHandler(
+            self.service, self.db, self.base_dir
+        )
+
+        # 初始化 HTML 渲染器（根据配置选择 t2i 或 playwright）
+        rendering_cfg = self.config.get("rendering", {})
+        use_t2i = rendering_cfg.get("use_t2i", False)  # 默认使用 Playwright
+        jpeg_quality = rendering_cfg.get("jpeg_quality", 95)
+
+        # 诊断日志：输出配置值
+        logger.info(f"[DeerPipe] 插件名称: {self.name}")
+        logger.info(f"[DeerPipe] 完整配置: {self.config}")
+        logger.info(f"[DeerPipe] rendering_cfg: {rendering_cfg}")
+        logger.info(f"[DeerPipe] use_t2i 配置值: {use_t2i}")
+
+        self.html_render = DeerPipeHTMLRenderer(use_t2i=use_t2i, jpeg_quality=jpeg_quality)
+        logger.info(f"[DeerPipe] HTML 渲染器已初始化: use_t2i={use_t2i}, jpeg_quality={jpeg_quality}")
 
     def _config_to_dict(self, config: AstrBotConfig) -> dict:
         """将 AstrBotConfig 转换为普通 dict.
@@ -235,27 +108,26 @@ class DeerPipePlugin(Star):
     async def terminate(self):
         """插件卸载时清理资源."""
         self._unregister_llm_tools()
+        # 关闭 HTML 渲染器
+        if hasattr(self, "html_render") and self.html_render:
+            await self.html_render.close()
         # 关闭全局 aiohttp session，防止资源泄漏
         await close_aiohttp_session()
 
     @filter.on_llm_request()
     async def on_llm_request(self, event: AstrMessageEvent, req: ProviderRequest):
-        """在 LLM 请求时附加自定义 prompt.
-
-        如果配置了 custom_prompt，则将其追加到 system_prompt 中。
-        """
+        """在 LLM 请求时附加自定义 prompt."""
         ai_config = self.config.get("ai_behavior", {})
         custom_prompt = (
             ai_config.get("custom_prompt", "") if isinstance(ai_config, dict) else ""
         )
         if custom_prompt:
-            logger.debug("[DeerPipe] 当前 custom_prompt 长度: %d", len(custom_prompt))
-            # 防护 system_prompt 为 None 的情况
+            logger.debug("当前 custom_prompt 长度: %d", len(custom_prompt))
             current_prompt = req.system_prompt or ""
-            logger.debug("[DeerPipe] 当前 system_prompt 长度: %d", len(current_prompt))
+            logger.debug("当前 system_prompt 长度: %d", len(current_prompt))
             req.system_prompt = f"{current_prompt}\n\n{custom_prompt}"
             logger.debug(
-                "[DeerPipe] 已追加 custom_prompt，当前 system_prompt 长度: %d",
+                "已追加 custom_prompt，当前 system_prompt 长度: %d",
                 len(req.system_prompt),
             )
 
@@ -263,20 +135,15 @@ class DeerPipePlugin(Star):
         """注销所有LLM工具函数."""
         try:
             func_tool_mgr = self.context.get_llm_tool_manager()
-            for tool_name in self.LLM_TOOLS:
+            for tool_name in LLM_TOOLS:
                 func_tool_mgr.remove_tool(tool_name)
-                logger.info(f"[DeerPipe] 已移除LLM工具: {tool_name}")
-        except Exception as e:
-            logger.error(f"[DeerPipe] 移除LLM工具失败: {e}")
-
-    @staticmethod
-    def _append_delivery_warning(
-        result: ToolResult, warning_code: str, exc: Exception
-    ) -> None:
-        result.append_delivery_warning(warning_code, exc)
+                logger.info(f"已移除LLM工具: {tool_name}")
+        except (AttributeError, RuntimeError) as e:
+            logger.error(f"移除LLM工具失败: {e}")
 
     @staticmethod
     def _is_send_ack_timeout(exc: Exception) -> bool:
+        """检查是否是发送确认超时错误."""
         msg = str(exc).lower()
         ack_timeout_hints = (
             "retcode=1200",
@@ -295,30 +162,30 @@ class DeerPipePlugin(Star):
         result: ToolResult,
         tool_name: str,
     ) -> None:
+        """非致命性地发送日历（失败时记录警告但不中断流程）."""
         try:
             if is_text:
                 await event.send(event.plain_result(cal_result))
             else:
                 await event.send(event.image_result(cal_result))
-        except Exception as exc:
+        except (OSError, RuntimeError) as exc:
             if self._is_send_ack_timeout(exc):
-                logger.info(f"[DeerPipe] {tool_name} calendar send ack timeout: {exc}")
-                self._append_delivery_warning(
-                    result, "SEND_ACK_TIMEOUT_MAY_DELIVERED", exc
-                )
+                logger.info(f"{tool_name} calendar send ack timeout: {exc}")
+                result.append_delivery_warning("SEND_ACK_TIMEOUT_MAY_DELIVERED", exc)
                 return
-            logger.warning(f"[DeerPipe] {tool_name} calendar send failed: {exc}")
-            self._append_delivery_warning(result, "CALENDAR_SEND_FAILED", exc)
+            logger.warning(f"{tool_name} calendar send failed: {exc}")
+            result.append_delivery_warning("CALENDAR_SEND_FAILED", exc)
 
     # ==================================================================
-    # LLM Tools - AI工具函数 (精简版)
+    # LLM Tools - AI工具函数
     # ==================================================================
     @llm_tool("deer_self")
     async def tool_deer_self(self, event: AstrMessageEvent) -> str:
-        """Check in (deer) for yourself today. Use this when the user wants to check in, mark their attendance, or says something like "deer", "打卡", "🦌", "撸", "鹿", "导管", "导", "🦌管", "鹿管", "撸管", "我要🦌", "我要撸", "我要鹿", "我要导管", "我要导", "帮我🦌", "帮我撸", "帮我鹿", "帮我导管", "帮我导" etc.
+        """Check in (deer) for yourself today.
 
-        Returns:
-            JSON result with success status, date, and stats.
+        Use this when user wants to check in for themselves.
+        Examples: "我要打卡", "今天鹿一下", etc.
+
         """
         user_id = str(event.get_sender_id())
         result = ToolResult.from_dict(await self.llm_tools.deer_self(user_id))
@@ -338,28 +205,23 @@ class DeerPipePlugin(Star):
     async def tool_deer_other(
         self, event: AstrMessageEvent, target_ids: list[str]
     ) -> str:
-        """Help other users check in (deer) on their behalf. Use this when the user says "帮我🦌", "帮XX🦌", "帮我撸", "帮XX撸", "帮我鹿", "帮XX鹿", "帮我导管", "帮XX导管", "帮我导", "帮XX导", "帮🦌", "帮撸", "帮鹿", "帮导管", "帮导", or asks you to check in for them.
+        """Help other users check in (deer) on their behalf.
 
-        IMPORTANT: Requires 'allow_ai_help_deer' to be enabled in plugin config.
+        Use this when user wants to help others check in.
+        Examples: "帮@小明打卡", "帮大家鹿一下", etc.
 
         Args:
-            target_ids(list[string]): List of target user IDs.
-
-        Returns:
-            JSON result with success status for each target.
+            target_ids (list[str]): List of user IDs to help check in for
         """
         user_id = str(event.get_sender_id())
         bot_id = str(event.get_self_id()) if event.get_self_id() else None
-        # 确保 target_ids 中的 ID 都是字符串
         target_ids = [str(tid) for tid in target_ids]
         result = ToolResult.from_dict(
             await self.llm_tools.deer_other(user_id, target_ids, bot_id)
         )
 
         # 如果帮打卡成功，为第一个成功的用户发送🦌历图片
-        # 如果操作者在目标列表中，优先显示操作者的日历
         if result.success and target_ids:
-            # 优先选择操作者自己的日历（如果操作者在目标列表中）
             display_user_id = user_id if user_id in target_ids else target_ids[0]
             if display_user_id:
                 async for cal_result, is_text in self.service.render_calendar(
@@ -376,26 +238,26 @@ class DeerPipePlugin(Star):
         self,
         event: AstrMessageEvent,
         day: int,
-        year: int = 0,
-        month: int = 0,
+        year: int,
+        month: int,
     ) -> str:
-        """Make a retroactive check-in (deer) for a specific past day. Use this when the user wants to 补打卡, 补🦌, 补撸, 补鹿, 补导管, 补导 for a date they missed.
+        """Make a retroactive check-in (deer) for a specific past day.
+
+        Use this when user wants to retroactively check in for a past day.
+        Examples: "补打卡昨天", "补录3号的记录", "补鹿5号", etc.
 
         Args:
-            day(number): Day of month (1-31) to retroactively check in
-            year(number): Year, default 0 means current year
-            month(number): Month (1-12), default 0 means current month
-
-        Returns:
-            JSON result with success status, retroactive date, and daily limit info.
+            day (int): The day of the month to retroactively check in (1-31)
+            year (int): The year (e.g., 2025), uses current year if not specified
+            month (int): The month (1-12), uses current month if not specified
         """
         user_id = str(event.get_sender_id())
         result = ToolResult.from_dict(
             await self.llm_tools.retro_deer(
                 user_id,
                 day,
-                year if year > 0 else None,
-                month if month > 0 else None,
+                year if year is not None and year > 0 else None,
+                month if month is not None and month > 0 else None,
             )
         )
 
@@ -412,37 +274,39 @@ class DeerPipePlugin(Star):
 
     @llm_tool("set_allow_help")
     async def tool_set_allow_help(self, event: AstrMessageEvent, allowed: bool) -> str:
-        """Set whether others can help check in (deer) for you. Use this when the user wants to allow or disallow others from helping them 🦌, 撸, 鹿, 导管, 导.
+        """Set whether others can help check in (deer) for you.
+
+        Use this when user wants to allow or disallow others from helping them check in.
+        Examples: "允许别人帮我打卡", "禁止别人帮我鹿", "开启帮打卡", "关闭帮打卡", etc.
 
         Args:
-            allowed(boolean): True to allow others to help, false to disable
-
-        Returns:
-            JSON result with the updated permission setting.
+            allowed (bool): True to allow others to help check in, False to disallow
         """
         user_id = str(event.get_sender_id())
-        result = ToolResult.from_dict(await self.llm_tools.set_allow_help(user_id, allowed))
+        result = ToolResult.from_dict(
+            await self.llm_tools.set_allow_help(user_id, allowed)
+        )
         return json.dumps(result.to_dict(), ensure_ascii=False)
 
     @llm_tool("get_user_deer_data")
     async def tool_get_user_deer_data(
         self,
         event: AstrMessageEvent,
-        year: int = 0,
-        month: int = 0,
+        year: int,
+        month: int,
     ) -> str:
-        """Get user's deer check-in data including calendar and statistics. Use this when the user asks "我🦌了多少次", "我撸了多少次", "我鹿了多少次", "我导了多少次", "我导管了多少次", "我的统计", "看看我的🦌历", "看看我的撸历", "看看我的鹿历", "看看我的导历", "看看我的导管历", "我的🦌数据", "我的撸数据", "我的鹿数据", "我的导数据", "我的导管数据", or any question about their 🦌, 撸, 鹿, 导管, 导 data.
+        """Get user's deer check-in data including calendar and statistics.
+
+        Use this when user wants to check their data for a specific month or year.
+        Examples: "查看2025年3月的鹿历", "我去年打卡了多少次", etc.
 
         Args:
-            year(number): Year, default 0 means current year
-            month(number): Month (1-12), default 0 means current month
-
-        Returns:
-            JSON with calendar data, total check-ins, days recorded, consecutive days, and analysis.
+            year (int): Year (e.g., 2025), uses current year if not specified
+            month (int): Month (1-12), uses current month if not specified
         """
         user_id = str(event.get_sender_id())
-        year_val = year if year > 0 else None
-        month_val = month if month > 0 else None
+        year_val = year if year is not None and year > 0 else None
+        month_val = month if month is not None and month > 0 else None
 
         # 合并获取日历和统计数据
         calendar_result = await self.llm_tools.get_calendar(
@@ -483,36 +347,25 @@ class DeerPipePlugin(Star):
         return json.dumps(result.to_dict(), ensure_ascii=False)
 
     # ==================================================================
-    # Command Handlers (英文主命令 + 中文别名)
+    # Command Handlers (使用命令处理器)
     # ==================================================================
 
     @filter.command("deer", alias={"鹿", "🦌", "撸", "撸🦌"})
-    async def deer_cmd(self, event: AstrMessageEvent):
-        """自我打卡或帮他人打卡 (/deer).
-
-        Command: /deer or /鹿 or /🦌 (自我打卡)
-                 /deer @someone or /🦌 @用户 (帮他人打卡)
-        Returns: 打卡成功消息 + 本月🦌历图片（合并为同一条消息）
-        """
-        async for result in self._run_deer_checkin(event):
+    async def deer_cmd(self, event: AstrMessageEvent) -> AsyncGenerator[Any, None]:
+        """自我打卡或帮他人打卡 (/deer)."""
+        async for result in self.deer_handler.run_deer_checkin(event, self.html_render):
             yield result
 
     @filter.command("允许被鹿", alias={"允许被🦌", "允许被撸", "允许被撸🦌"})
-    async def allow_deer(self, event: AstrMessageEvent):
-        """允许他人帮自己打卡 (/允许被鹿).
-
-        Command: /允许被鹿 or /允许被🦌
-        """
-        result = await self.service.handle_set_self_help(event, True)
+    async def allow_deer(self, event: AstrMessageEvent) -> AsyncGenerator[Any, None]:
+        """允许他人帮自己打卡 (/允许被鹿)."""
+        result = await self.deer_handler.handle_allow_deer(event)
         yield event.plain_result(result)
 
     @filter.command("禁止被鹿", alias={"禁止被🦌", "禁止被撸", "禁止被撸🦌"})
-    async def forbid_deer(self, event: AstrMessageEvent):
-        """禁止他人帮自己打卡 (/禁止被鹿).
-
-        Command: /禁止被鹿 or /禁止被🦌
-        """
-        result = await self.service.handle_set_self_help(event, False)
+    async def forbid_deer(self, event: AstrMessageEvent) -> AsyncGenerator[Any, None]:
+        """禁止他人帮自己打卡 (/禁止被鹿)."""
+        result = await self.deer_handler.handle_forbid_deer(event)
         yield event.plain_result(result)
 
     @filter.command_group("设置被鹿", alias={"设置被撸", "设置被撸🦌"})
@@ -521,62 +374,83 @@ class DeerPipePlugin(Star):
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @set_deer_group.command("开", alias={"on", "撸", "撸🦌"})
-    async def set_deer_on(self, event: AstrMessageEvent):
+    async def set_deer_on(self, event: AstrMessageEvent) -> AsyncGenerator[Any, None]:
         """管理员允许他人被帮deer (/设置被鹿 开 @用户)."""
-        result = await self.service.handle_set_other_help(event, True)
+        result = await self.admin_handler.handle_set_deer_on(event)
         if result:
             yield event.plain_result(result)
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @set_deer_group.command("关", alias={"off", "禁撸", "禁撸🦌"})
-    async def set_deer_off(self, event: AstrMessageEvent):
+    async def set_deer_off(self, event: AstrMessageEvent) -> AsyncGenerator[Any, None]:
         """管理员禁止他人被帮deer (/设置被鹿 关 @用户)."""
-        result = await self.service.handle_set_other_help(event, False)
+        result = await self.admin_handler.handle_set_deer_off(event)
         if result:
             yield event.plain_result(result)
 
     @filter.command("retro_deer", alias={"补鹿", "补🦌", "补撸", "补撸🦌"})
-    async def retro_deer_cmd(self, event: AstrMessageEvent, day: int):
-        """补deer (/retro_deer <day>).
-
-        Command: /retro_deer <day> or /补鹿 <day>
-        Restriction: Limited by daily_retro_limit config.
-        """
-        result = await self.service.handle_deer_past(event, day)
+    async def retro_deer_cmd(
+        self, event: AstrMessageEvent, day: int
+    ) -> AsyncGenerator[Any, None]:
+        """补deer (/retro_deer <day>)."""
+        result = await self.deer_handler.handle_retro_deer(event, day)
         if result:
             yield event.plain_result(result)
 
-    @filter.command("deer_calendar", alias={"鹿历", "🦌历", "撸历", "撸🦌历"})
-    async def deer_calendar_cmd(self, event: AstrMessageEvent):
-        """显示本月日历 (/deer_calendar).
-
-        支持查看自己的日历或 @ 他人的日历。
-        """
-        async for result in self._run_calendar_query(event, dt.date.today(), "calendar"):
-            yield result
-
     @filter.command(
-        "last_month_calendar", alias={"上月鹿历", "上月🦌历", "上月撸历", "上月撸🦌历"}
+        "deer_calendar",
+        alias={
+            "鹿历",
+            "🦌历",
+            "撸历",
+            "撸🦌历",
+            "上月鹿历",
+            "上月🦌历",
+            "上月撸历",
+            "上月撸🦌历",
+        },
     )
-    async def last_month_calendar_cmd(self, event: AstrMessageEvent):
-        """显示上月日历 (/last_month_calendar).
+    async def deer_calendar_cmd(
+        self, event: AstrMessageEvent, year: int = 0, month: int = 0
+    ) -> AsyncGenerator[Any, None]:
+        """显示指定月份日历 (/deer_calendar [year] [month]).
 
-        支持查看自己的上月日历或 @ 他人的上月日历。
+        示例:
+            /deer_calendar - 显示本月日历
+            /deer_calendar 2025 3 - 显示2025年3月日历
+            /deer_calendar 0 3 - 显示今年3月日历
+            /上月鹿历 - 显示上月日历
         """
-        first = dt.date.today().replace(day=1)
-        last_month = (first - dt.timedelta(days=1)).replace(day=1)
+        # 检查是否是"上月"命令
+        plain_text = ""
+        for comp in event.get_messages():
+            if isinstance(comp, Plain):
+                plain_text = comp.text.strip()
+                break
 
-        async for result in self._run_calendar_query(
-            event,
-            last_month,
-            "last_month_calendar",
-            self_title="📅 上月鹿历",
-            other_title_suffix="的上月鹿历",
+        if plain_text.startswith(("上月", "/上月")):
+            today = dt.date.today()
+            first = today.replace(day=1)
+            target_date = (first - dt.timedelta(days=1)).replace(day=1)
+            title = "📅 上月鹿历"
+        elif year > 0 or month > 0:
+            target_date = dt.date.today()
+            if year > 0:
+                target_date = target_date.replace(year=year)
+            if 1 <= month <= 12:
+                target_date = target_date.replace(month=month)
+            title = f"📅 {target_date.year}年{target_date.month}月鹿历"
+        else:
+            target_date = dt.date.today()
+            title = None
+
+        async for result in self.calendar_handler.handle_calendar_query(
+            event, self.html_render, target_date, title
         ):
             yield result
 
     # ==================================================================
-    # Data export/import commands (管理员命令，不是LLM工具)
+    # Data export/import commands
     # ==================================================================
     @filter.command_group("管理鹿管数据", alias={"管理🦌管数据"})
     async def deer_data_group(self, event: AstrMessageEvent) -> None:
@@ -584,438 +458,163 @@ class DeerPipePlugin(Star):
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @deer_data_group.command("导出", alias={"export"})
-    async def export_data_cmd(self, event: AstrMessageEvent):
+    async def export_data_cmd(
+        self, event: AstrMessageEvent
+    ) -> AsyncGenerator[Any, None]:
         """导出所有数据 (/管理鹿管数据 导出)."""
-        success, msg, data = await self.data_manager.export_data()
-        if not success:
-            yield event.plain_result(msg)
-            return
-
-        # 检查是否有数据可以导出
-        record_count = len(data.get("deer_records", [])) if data else 0
-        config_count = len(data.get("user_configs", [])) if data else 0
-        if record_count == 0 and config_count == 0:
-            yield event.plain_result(
-                "数据库为空，没有数据可以导出。请先使用🦌命令打卡后再导出。"
-            )
-            return
-
-        # 创建临时文件并发送
-        temp_path: str | None = None
-        try:
-            json_str = json.dumps(data, ensure_ascii=False, indent=2)
-            with tempfile.NamedTemporaryFile(
-                mode="w", suffix=".json", delete=False, encoding="utf-8"
-            ) as f:
-                f.write(json_str)
-                temp_path = f.name
-
-            # 发送文件给用户
-            file_component = File(name="deerpipe_export.json", file=temp_path)
-            yield event.chain_result([file_component])
-
-        except OSError as e:
-            logger.error(f"导出文件发送失败: {e}")
-            yield event.plain_result(f"{msg}\n文件发送失败: {e}")
-        finally:
-            # 确保临时文件被删除
-            if temp_path:
-                try:
-                    os.unlink(temp_path)
-                except (OSError, FileNotFoundError) as e:
-                    logger.warning(f"删除临时导出文件失败: {e}")
+        async for result in self.data_handler.handle_export_data(event):
+            yield result
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @deer_data_group.command("导入", alias={"import"})
-    async def import_data_cmd(self, event: AstrMessageEvent):
+    async def import_data_cmd(
+        self, event: AstrMessageEvent
+    ) -> AsyncGenerator[Any, None]:
         """导入数据 (/管理鹿管数据 导入)."""
-        # 记录导入会话状态（绑定到具体用户，实例级隔离）
-        user_id = event.get_sender_id()
-        now = time.monotonic()
-        async with self._import_session_lock:
-            # 清理所有超时的会话，防止内存泄漏
-            timeout_threshold = now - self._import_session_timeout
-            expired_keys = [
-                sid
-                for sid, start_time in self._import_sessions.items()
-                if start_time < timeout_threshold
-            ]
-            for sid in expired_keys:
-                del self._import_sessions[sid]
-            self._import_sessions[user_id] = now
-        yield event.plain_result(
-            "请发送 JSON 格式的数据文件（通常是 .json 文件），或在回复此消息时附上文件。\n"
-            "注意：导入将合并现有数据，相同日期的记录会累加次数。\n"
-            "请在5分钟内发送文件，超时请重新执行导入命令。"
-        )
+        async for result in self.data_handler.handle_import_data(event):
+            yield result
 
     @filter.event_message_type(filter.EventMessageType.ALL)
-    async def on_file_message(self, event: AstrMessageEvent):
-        """监听文件消息以处理导入.
+    async def on_file_message(
+        self, event: AstrMessageEvent
+    ) -> AsyncGenerator[Any, None]:
+        """监听文件消息以处理导入."""
+        async for result in self.data_handler.handle_import_file(event):
+            yield result
 
-        当管理员发送文件时，自动尝试解析并导入数据。
-        需要满足以下条件才会处理：
-        1. 是管理员身份
-        2. 在执行导入命令后5分钟内
-        3. 发送者是发起导入命令的用户本人（会话隔离）
-        文件大小限制：10MB
-        """
-        # 检查是否是管理员（内部检查，避免每条消息都触发权限提示）
-        if not event.is_admin():
-            return
-
-        sender_id = event.get_sender_id()
-
-        # 检查是否有活跃的导入会话（实例级隔离）
-        async with self._import_session_lock:
-            session_start = self._import_sessions.get(sender_id)
-            if session_start is None:
-                return
-
-            # 检查会话是否超时
-            now = time.monotonic()
-            if now - session_start > self._import_session_timeout:
-                del self._import_sessions[sender_id]
-                return
-
-        temp_file_path: str | None = None
-
-        try:
-            # 检查消息中是否有文件
-            messages = event.get_messages()
-            has_file = False
-            for comp in messages:
-                if isinstance(comp, File):
-                    has_file = True
-                    break
-            if not has_file:
-                return
-
-            # 处理文件导入
-            for comp in messages:
-                if isinstance(comp, File):
-                    # 获取文件内容
-                    file_path = await comp.get_file()
-                    if not file_path:
-                        continue
-                    temp_file_path = file_path
-
-                    # 检查文件大小（限制10MB）
-                    try:
-                        file_size = os.path.getsize(file_path)
-                        max_size = 10 * 1024 * 1024  # 10MB
-                        if file_size > max_size:
-                            yield event.plain_result(
-                                f"文件过大 ({file_size / 1024 / 1024:.2f}MB > 10MB)，请压缩或分批导入。"
-                            )
-                            return
-                    except OSError:
-                        pass  # 如果无法获取大小，继续尝试处理
-
-                    # 读取文件内容
-                    try:
-                        with open(file_path, encoding="utf-8") as f:
-                            file_content = f.read()
-                    except OSError as e:
-                        logger.error(f"读取导入文件失败: {e}")
-                        yield event.plain_result(f"读取文件失败: {e}")
-                        return
-
-                    # 尝试解析 JSON
-                    try:
-                        data = json.loads(file_content)
-                    except json.JSONDecodeError as e:
-                        yield event.plain_result(f"JSON 解析失败: {e}")
-                        return
-
-                    # 验证是否是鹿管数据格式
-                    if not isinstance(data, dict):
-                        yield event.plain_result(
-                            "文件格式错误：JSON 根节点必须是对象（字典）。"
-                        )
-                        return
-
-                    if "deer_records" not in data and "user_configs" not in data:
-                        yield event.plain_result(
-                            "文件格式错误：未找到有效的鹿管数据字段。\n"
-                            "请确保文件包含 'deer_records' 或 'user_configs' 字段。"
-                        )
-                        return
-
-                    # 执行导入
-                    success, msg = await self.data_manager.import_data(data)
-                    yield event.plain_result(msg)
-                    return
-
-        except OSError as e:
-            logger.error(f"导入文件处理失败: {e}")
-            yield event.plain_result(f"文件处理失败: {e}")
-        finally:
-            # 统一清理临时文件和会话状态
-            async with self._import_session_lock:
-                self._import_sessions.pop(sender_id, None)
-            if temp_file_path:
-                try:
-                    os.unlink(temp_file_path)
-                except (OSError, FileNotFoundError) as e:
-                    logger.warning(f"删除临时导入文件失败: {e}")
-
-    async def handle_import_file(self, file_content: str) -> str:
-        """处理导入文件内容.
-
-        Args:
-            file_content: 文件内容字符串
-
-        Returns:
-            处理结果消息
-        """
-        try:
-            data = json.loads(file_content)
-            success, msg = await self.data_manager.import_data(data)
-            return msg
-        except json.JSONDecodeError as e:
-            return f"JSON 解析失败: {e}"
-        except Exception as e:
-            return f"导入失败: {e}"
-
-    def _is_explicit_slash_command(self, event: AstrMessageEvent) -> bool:
-        """Check whether original message text uses an explicit '/' command prefix."""
-        for comp in event.get_messages():
-            if isinstance(comp, Plain):
-                return comp.text.strip().startswith("/")
-        return False
-
-    def _mark_deer_event_handled(self, event: AstrMessageEvent, key: str) -> bool:
-        """Mark deer flow as handled for this event."""
-        extra_key = f"deerpipe_{key}_handled"
-        if event.get_extra(extra_key):
-            return False
-        event.set_extra(extra_key, True)
-        return True
-
-    async def _run_deer_checkin(self, event: AstrMessageEvent):
-        if not self._mark_deer_event_handled(event, "deer"):
-            return
-
-        messages = event.message_obj.message
-        at_list = [m for m in messages if isinstance(m, At)]
-        at_ids = extract_mention_user_ids(at_list)
-
-        if at_ids:
-            if event.get_message_type() != MessageType.GROUP_MESSAGE:
-                yield event.plain_result("该命令仅限群聊使用。")
-                return
-
-            self_id = event.get_self_id()
-            if self_id and self_id in at_ids:
-                yield event.plain_result("不可以帮 Bot🦌哦~")
-                return
-
-            try:
-                results = await self.service.batch_deer_other(
-                    event.get_sender_id(), at_ids, at_list, self_id
-                )
-            except Exception as exc:
-                logger.error(f"deer_cmd help_other failed: {exc}")
-                yield event.plain_result("操作失败，请稍后重试。")
-                return
-
-            if len(at_ids) == 1:
-                result_data = (
-                    results[0] if results else {"success": False, "reason": "未知错误"}
-                )
-                target_name = result_data["nickname"]
-
-                if not result_data["success"]:
-                    reason = result_data.get("reason", "无法帮🦌")
-                    yield event.plain_result(f"❌ 无法帮 {target_name} 🦌：{reason}")
-                    return
-
-                async for cal_result, is_text in self.service.render_calendar(
-                    event,
-                    dt.date.today(),
-                    self.html_render,
-                    user_id=result_data["user_id"],
-                ):
-                    if is_text:
-                        yield event.plain_result(f"成功帮{target_name}🦌了")
-                        yield event.plain_result(cal_result)
-                    else:
-                        yield (
-                            event.make_result()
-                            .message(f"成功帮{target_name}🦌了")
-                            .url_image(cal_result)
-                        )
-                return
-
-            success_count = sum(1 for r in results if r["success"])
-            image_url = await self._render_batch_report(results, success_count)
-            if image_url:
-                total = len(results)
-                msg = f"批量帮🦌完成！成功 {success_count}/{total} 人"
-                yield event.make_result().message(msg).url_image(image_url)
-            else:
-                lines = [f"批量帮🦌结果（{success_count}/{len(results)} 成功）："]
-                for r in results:
-                    status = "✅" if r["success"] else "❌"
-                    lines.append(f"{status} {r['nickname']} - 第 {r['count']} 次")
-                yield event.plain_result("\n".join(lines))
-            return
-
-        result = await self.service.handle_deer_self(event)
-        async for cal_result, is_text in self.service.render_calendar(
-            event, dt.date.today(), self.html_render
+    # ==================================================================
+    # Leaderboard commands
+    # ==================================================================
+    @filter.command(
+        "deer_rank", alias={"鹿排行榜", "鹿排名", "鹿榜🦌排行榜", "🦌排名", "🦌榜"}
+    )
+    async def leaderboard_cmd(
+        self, event: AstrMessageEvent
+    ) -> AsyncGenerator[Any, None]:
+        """查看今日群打卡排行榜 (/leaderboard)."""
+        async for result in self.leaderboard_handler.handle_daily_leaderboard(
+            event, self.html_render
         ):
-            if is_text:
-                yield event.plain_result(result)
-                yield event.plain_result(cal_result)
-            else:
-                yield event.make_result().message(result).url_image(cal_result)
+            yield result
 
-    async def _run_calendar_query(
-        self,
-        event: AstrMessageEvent,
-        month_date: dt.date,
-        dedup_key: str,
-        self_title: str | None = None,
-        other_title_suffix: str = "的鹿历",
-    ):
-        if not self._mark_deer_event_handled(event, dedup_key):
-            return
-
-        messages = event.message_obj.message
-        at_list = [m for m in messages if isinstance(m, At)]
-        at_ids = extract_mention_user_ids(at_list)
-        at_map = {str(m.qq): m.name for m in at_list if m.name}
-
-        if at_ids:
-            target_id = str(at_list[0].qq)
-            target_name = at_map.get(target_id, target_id)
-            async for result, is_text in self.service.render_calendar(
-                event, month_date, self.html_render, user_id=target_id
-            ):
-                if is_text:
-                    yield event.plain_result(f"{target_name} {other_title_suffix}：\n{result}")
-                else:
-                    yield (
-                        event.make_result()
-                        .message(f"{target_name} {other_title_suffix}")
-                        .url_image(result)
-                    )
-            return
-
-        async for result, is_text in self.service.render_calendar(
-            event, month_date, self.html_render
+    @filter.command("deer_yesterday_rank", alias={"昨日鹿榜", "昨日🦌榜"})
+    async def yesterday_rank_cmd(
+        self, event: AstrMessageEvent
+    ) -> AsyncGenerator[Any, None]:
+        """查看昨日群打卡排行榜 (/yesterday_rank)."""
+        async for result in self.leaderboard_handler.handle_yesterday_leaderboard(
+            event, self.html_render
         ):
-            if is_text:
-                prefix = f"{self_title}\n" if self_title else ""
-                yield event.plain_result(f"{prefix}{result}")
-            elif self_title:
-                yield event.make_result().message(self_title).url_image(result)
-            else:
-                yield event.image_result(result)
+            yield result
+
+    @filter.command("deer_monthly_rank", alias={"鹿月榜", "🦌月榜"})
+    async def monthly_rank_cmd(
+        self, event: AstrMessageEvent
+    ) -> AsyncGenerator[Any, None]:
+        """查看本月群打卡排行榜 (/monthly_rank)."""
+        async for result in self.leaderboard_handler.handle_monthly_leaderboard(
+            event, self.html_render
+        ):
+            yield result
+
+    @filter.command("deer_map", alias={"鹿力图", "鹿年历", "🦌力图"})
+    async def deermap_cmd(
+        self, event: AstrMessageEvent, year: int | None = None
+    ) -> AsyncGenerator[Any, None]:
+        """查看年度打卡热力图 (/deermap [年份])."""
+        async for result in self.leaderboard_handler.handle_deermap(
+            event, self.html_render, year
+        ):
+            yield result
 
     # ==================================================================
     # Plain message handlers (without / prefix)
     # ==================================================================
 
-    @filter.regex(r"^(?!/)(🦌|鹿|撸|撸🦌)(?!历)")
-    async def plain_deer_merged_cmd(self, event: AstrMessageEvent):
-        # Skip explicit slash commands to avoid duplicate trigger with @filter.command.
-        if self._is_explicit_slash_command(event):
-            return
+    def _is_explicit_slash_command(self, event: AstrMessageEvent) -> bool:
+        """检查消息是否以 / 开头."""
+        for comp in event.get_messages():
+            if isinstance(comp, Plain):
+                return comp.text.strip().startswith("/")
+        return False
 
-        async for result in self._run_deer_checkin(event):
-            yield result
+    def _parse_calendar_date(self, text: str) -> tuple[dt.date, str] | None:
+        """从文本中解析日历查询日期.
 
-    @filter.regex(r"^(?!/)🦌历$")
-    async def plain_deer_calendar_cmd(self, event: AstrMessageEvent):
-        # Skip explicit slash commands to avoid duplicate trigger with @filter.command.
-        if self._is_explicit_slash_command(event):
-            return
-
-        async for result in self._run_calendar_query(event, dt.date.today(), "calendar"):
-            yield result
-
-    @filter.regex(r"^(?!/)上月🦌历$")
-    async def plain_last_month_calendar_cmd(self, event: AstrMessageEvent):
-        # Skip explicit slash commands to avoid duplicate trigger with @filter.command.
-        if self._is_explicit_slash_command(event):
-            return
-
-        first = dt.date.today().replace(day=1)
-        last_month = (first - dt.timedelta(days=1)).replace(day=1)
-
-        async for result in self._run_calendar_query(
-            event,
-            last_month,
-            "last_month_calendar",
-            self_title="📅 上月鹿历",
-            other_title_suffix="的上月鹿历",
-        ):
-            yield result
-
-    async def _render_batch_report(
-        self, results: list[dict], success_count: int
-    ) -> str | None:
-        """渲染批量报告图片.
+        支持的格式:
+        - 🦌历 / 鹿历 / 撸历 / 撸🦌历 -> 本月
+        - 上月🦌历 / 上月鹿历 -> 上月
+        - 2025年3月🦌历 / 2025年3月鹿历 -> 指定年月
 
         Args:
-            results: 打卡结果列表
-            success_count: 成功人数
+            text: 用户输入文本
 
         Returns:
-            图片 URL 或 None（渲染失败）
+            (target_date, title) 或 None 如果不匹配
         """
-        from pathlib import Path
+        import re
 
-        template_path = Path(__file__).parent / "templates" / "batch_report.html"
-        css_path = (
-            Path(__file__).parent / "templates" / "res" / "css" / "batch_report.css"
-        )
+        text = text.strip()
 
-        if not template_path.exists():
-            logger.error(f"批量报告模板不存在: {template_path}")
+        # 匹配 "上月🦌历" 格式
+        if re.match(r"^上月[🦌鹿撸](历|🦌历)$", text):
+            today = dt.date.today()
+            first = today.replace(day=1)
+            last_month = (first - dt.timedelta(days=1)).replace(day=1)
+            return last_month, "📅 上月鹿历"
+
+        # 匹配 "2025年3月🦌历" 格式
+        match = re.match(r"^(\d{4})年(\d{1,2})月[🦌鹿撸](历|🦌历)$", text)
+        if match:
+            year = int(match.group(1))
+            month = int(match.group(2))
+            if 1 <= month <= 12:
+                try:
+                    target_date = dt.date(year, month, 1)
+                    return target_date, f"📅 {year}年{month}月鹿历"
+                except ValueError:
+                    return None
             return None
 
-        try:
-            # 读取模板和 CSS
-            html = template_path.read_text(encoding="utf-8")
-            css_content = ""
-            if css_path.exists():
-                css_content = f"<style>{css_path.read_text(encoding='utf-8')}</style>"
+        # 匹配 "🦌历" / "鹿历" / "撸历" / "撸🦌历" 格式 (本月)
+        if re.match(r"^[🦌鹿撸](历|🦌历)$", text):
+            today = dt.date.today()
+            return today, None  # None 表示使用默认标题
 
-            # 构建渲染数据
-            payload = {
-                "css_style": css_content,
-                "results": results,
-                "total_count": len(results),
-                "success_count": success_count,
-            }
+        return None
 
-            # 高度也直接按 2 倍物理像素计算
-            # 头部(~200) + 列表容器上下内边距(40) + 每行(~112) + 底部(~160)
-            estimated_height = 200 + 40 + len(payload["results"]) * 112 + 160
+    @filter.regex(r"^(?!/)(🦌|鹿|撸|撸🦌)(?!历)")
+    async def plain_deer_merged_cmd(
+        self, event: AstrMessageEvent
+    ) -> AsyncGenerator[Any, None]:
+        """纯文本打卡命令（不带/前缀）."""
+        if self._is_explicit_slash_command(event):
+            return
 
-            # 调用渲染服务
-            image_url = await self.html_render(
-                html,
-                payload,
-                return_url=True,
-                options={
-                    "type": "png",
-                    "full_page": False,
-                    "scale": "device",  # 保持原本的参数，不用改
-                    "clip": {
-                        "x": 0,
-                        "y": 0,
-                        "width": 1360,  # 宽度直接锁定为 1360
-                        "height": estimated_height,
-                    },
-                },
-            )
-            return image_url
+        async for result in self.deer_handler.run_deer_checkin(event, self.html_render):
+            yield result
 
-        except Exception as exc:
-            logger.error(f"批量报告渲染失败: {exc}")
-            return None
+    @filter.regex(r"^(?!/)(上月)?(\d{4}年\d{1,2}月)?[🦌鹿撸](历|🦌历)$")
+    async def plain_calendar_merged_cmd(
+        self, event: AstrMessageEvent
+    ) -> AsyncGenerator[Any, None]:
+        """纯文本日历查询命令（不带/前缀）.
+
+        支持格式:
+        - 🦌历 / 鹿历 / 撸历 / 撸🦌历 -> 本月
+        - 上月🦌历 / 上月鹿历 -> 上月
+        - 2025年3月🦌历 / 2025年3月鹿历 -> 指定年月
+        """
+        if self._is_explicit_slash_command(event):
+            return
+
+        for comp in event.get_messages():
+            if isinstance(comp, Plain):
+                parsed = self._parse_calendar_date(comp.text)
+                if parsed:
+                    target_date, title = parsed
+                    async for result in self.calendar_handler.handle_calendar_query(
+                        event, self.html_render, target_date, title
+                    ):
+                        yield result
+                    return
