@@ -92,6 +92,7 @@ from .application import (
     DeerPipeLLMTools,
     DeerPipeService,
     LeaderboardCommandHandler,
+    LeaderboardType,
     MessageTemplates,
 )
 
@@ -155,6 +156,7 @@ __all__ = [
     "DeerPipeLLMTools",
     "DeerPipeService",
     "LeaderboardCommandHandler",
+    "LeaderboardType",
     "MessageTemplates",
     # Infrastructure
     "CalendarRenderer",

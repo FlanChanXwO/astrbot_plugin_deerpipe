@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import datetime as dt
 from collections.abc import AsyncGenerator
+from enum import Enum, auto
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,14 @@ from ...infrastructure.utils.http_utils import fetch_avatar_base64
 from ...shared import ResourcePaths
 
 logger = get_logger()
+
+
+class LeaderboardType(Enum):
+    """排行榜类型枚举."""
+
+    DAILY = auto()
+    YESTERDAY = auto()
+    MONTHLY = auto()
 
 
 class LeaderboardCommandHandler:
@@ -54,14 +63,18 @@ class LeaderboardCommandHandler:
         self.leaderboard_css = paths.style("leaderboard")
         self.deermap_css = paths.style("deermap")
 
-    async def handle_daily_leaderboard(
-        self, event: AstrMessageEvent, html_render
+    async def handle_leaderboard(
+        self,
+        event: AstrMessageEvent,
+        html_render,
+        leaderboard_type: LeaderboardType,
     ) -> AsyncGenerator[Any, None]:
-        """处理今日群排行榜查询.
+        """处理群排行榜查询 (统一入口).
 
         Args:
             event: 消息事件
             html_render: HTML渲染函数
+            leaderboard_type: 排行榜类型
 
         Yields:
             发送给用户的响应
@@ -76,85 +89,48 @@ class LeaderboardCommandHandler:
             return
 
         today = dt.date.today()
-        async for result in self._render_leaderboard(
-            event, html_render, group_id, today, "今日"
-        ):
-            yield result
 
-    async def handle_yesterday_leaderboard(
-        self, event: AstrMessageEvent, html_render
-    ) -> AsyncGenerator[Any, None]:
-        """处理昨日群排行榜查询.
+        match leaderboard_type:
+            case LeaderboardType.DAILY:
+                async for result in self._render_daily_leaderboard(
+                    event, html_render, group_id, today
+                ):
+                    yield result
 
-        Args:
-            event: 消息事件
-            html_render: HTML渲染函数
+            case LeaderboardType.YESTERDAY:
+                yesterday = today - dt.timedelta(days=1)
+                async for result in self._render_daily_leaderboard(
+                    event, html_render, group_id, yesterday, is_yesterday=True
+                ):
+                    yield result
 
-        Yields:
-            发送给用户的响应
-        """
-        if event.get_message_type() != MessageType.GROUP_MESSAGE:
-            yield event.plain_result(TEMPLATE_GROUP_ONLY)
-            return
+            case LeaderboardType.MONTHLY:
+                async for result in self._render_monthly_leaderboard(
+                    event, html_render, group_id, today.year, today.month
+                ):
+                    yield result
 
-        group_id = str(event.get_group_id()) if event.get_group_id() else None
-        if not group_id:
-            yield event.plain_result("无法获取群ID，请在群聊中使用此命令。")
-            return
-
-        yesterday = dt.date.today() - dt.timedelta(days=1)
-        async for result in self._render_leaderboard(
-            event, html_render, group_id, yesterday, "昨日"
-        ):
-            yield result
-
-    async def handle_monthly_leaderboard(
-        self, event: AstrMessageEvent, html_render
-    ) -> AsyncGenerator[Any, None]:
-        """处理本月群排行榜查询.
-
-        Args:
-            event: 消息事件
-            html_render: HTML渲染函数
-
-        Yields:
-            发送给用户的响应
-        """
-        if event.get_message_type() != MessageType.GROUP_MESSAGE:
-            yield event.plain_result(TEMPLATE_GROUP_ONLY)
-            return
-
-        group_id = str(event.get_group_id()) if event.get_group_id() else None
-        if not group_id:
-            yield event.plain_result("无法获取群ID，请在群聊中使用此命令。")
-            return
-
-        today = dt.date.today()
-        async for result in self._render_monthly_leaderboard(
-            event, html_render, group_id, today.year, today.month, "本月"
-        ):
-            yield result
-
-    async def _render_leaderboard(
+    async def _render_daily_leaderboard(
         self,
         event: AstrMessageEvent,
         html_render,
         group_id: str,
         date: dt.date,
-        title_prefix: str,
+        is_yesterday: bool = False,
     ) -> AsyncGenerator[Any, None]:
-        """渲染排行榜图片.
+        """渲染日排行榜.
 
         Args:
             event: 消息事件
             html_render: HTML渲染函数
             group_id: 群组ID
             date: 日期
-            title_prefix: 标题前缀
+            is_yesterday: 是否是昨日
 
         Yields:
             发送给用户的响应
         """
+        title_prefix = "昨日" if is_yesterday else "今日"
         db = await self.db.get_connection()
         try:
             leaderboard_data = await self.db.get_group_daily_leaderboard(
@@ -169,7 +145,7 @@ class LeaderboardCommandHandler:
                 )
                 return
 
-            # 获取当前用户信息（用于显示在排行榜底部）
+            # 获取当前用户信息
             user_id = str(event.get_sender_id()) if event.get_sender_id() else None
             user_rank = None
             user_count = 0
@@ -180,7 +156,6 @@ class LeaderboardCommandHandler:
                         user_count = count
                         break
 
-            # 渲染排行榜图片
             image_url = await self._render_leaderboard_image(
                 html_render,
                 leaderboard_data,
@@ -195,7 +170,6 @@ class LeaderboardCommandHandler:
             if image_url:
                 yield event.image_result(image_url)
             else:
-                # 渲染失败，返回文本
                 yield event.plain_result(
                     self._format_leaderboard_text(
                         leaderboard_data, title_prefix, date, False
@@ -214,7 +188,6 @@ class LeaderboardCommandHandler:
         group_id: str,
         year: int,
         month: int,
-        title_prefix: str,
     ) -> AsyncGenerator[Any, None]:
         """渲染月排行榜图片.
 
@@ -224,11 +197,11 @@ class LeaderboardCommandHandler:
             group_id: 群组ID
             year: 年份
             month: 月份
-            title_prefix: 标题前缀
 
         Yields:
             发送给用户的响应
         """
+        title_prefix = "本月"
         db = await self.db.get_connection()
         try:
             leaderboard_data = await self.db.get_group_monthly_leaderboard(
@@ -306,9 +279,9 @@ class LeaderboardCommandHandler:
             title: 标题
             date_str: 日期字符串
             is_monthly: 是否是月排行榜
-            user_id: 当前用户ID（可选）
-            user_rank: 当前用户排名（可选）
-            user_count: 当前用户打卡次数（可选）
+            user_id: 当前用户ID (可选)
+            user_rank: 当前用户排名 (可选)
+            user_count: 当前用户打卡次数 (可选)
 
         Returns:
             图片URL或None
@@ -425,7 +398,7 @@ class LeaderboardCommandHandler:
         Args:
             event: 消息事件
             html_render: HTML渲染函数
-            year: 年份，None表示今年
+            year: 年份, None表示今年
 
         Yields:
             发送给用户的响应
@@ -470,7 +443,7 @@ class LeaderboardCommandHandler:
             stats_data: 日期到打卡次数的映射 {YYYY-MM-DD: count}
             year: 年份
             user_id: 用户ID
-            event: 消息事件（用于获取头像）
+            event: 消息事件 (用于获取头像)
 
         Returns:
             图片URL或None
@@ -553,7 +526,7 @@ class LeaderboardCommandHandler:
             year: 年份
 
         Returns:
-            (weeks_data, months, month_start_indices, week_to_month) 周数据、月份名称列表、每月起始周索引、每周所属月份索引
+            (weeks_data, months, month_start_indices, week_to_month) 周数据, 月份名称列表, 每月起始周索引, 每周所属月份索引
         """
         import calendar
 
@@ -569,7 +542,7 @@ class LeaderboardCommandHandler:
         ]
 
         def get_level(count: int) -> str:
-            """根据次数获取颜色等级."""
+            """Get color level by count."""
             if count == 0:
                 return "level-0"
             for i, threshold in enumerate(levels[1:], 1):
@@ -614,26 +587,18 @@ class LeaderboardCommandHandler:
 
     @staticmethod
     def _format_deermap_text(stats_data: dict[str, int], year: int) -> str:
-        """格式化鹿力图文本.
-
-        Args:
-            stats_data: 日期到打卡次数的映射
-            year: 年份
-
-        Returns:
-            格式化的文本
-        """
         total_days = len(stats_data)
         total_count = sum(stats_data.values())
         max_count = max(stats_data.values()) if stats_data else 0
 
         lines = [
-            f"🔥 {year}年鹿力图",
+            f"{year}年鹿力图",
             "",
-            "📊 统计信息:",
-            f"  • 鹿天数: {total_days}天",
-            f"  • 总鹿次数: {total_count}次",
-            f"  • 单日最多: {max_count}次",
+            "统计信息:",
+            f"  鹿天数: {total_days}天",
+            f"  总鹿次数: {total_count}次",
+            f"  单日最多: {max_count}次",
         ]
 
         return "\n".join(lines)
+

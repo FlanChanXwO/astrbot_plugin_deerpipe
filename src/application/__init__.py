@@ -10,6 +10,7 @@ from .commands import (
     DataCommandHandler,
     DeerCommandHandler,
     LeaderboardCommandHandler,
+    LeaderboardType,
 )
 from .services import (
     DataManager,
@@ -26,6 +27,7 @@ __all__ = [
     "AdminCommandHandler",
     "DataCommandHandler",
     "LeaderboardCommandHandler",
+    "LeaderboardType",
     # Services
     "DataManager",
     "DeerPipeLLMTools",

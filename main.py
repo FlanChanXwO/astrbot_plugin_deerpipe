@@ -31,6 +31,7 @@ from .src import (
     DeerPipeLLMTools,
     DeerPipeService,
     LeaderboardCommandHandler,
+    LeaderboardType,
     close_aiohttp_session,
     get_logger,
 )
@@ -492,8 +493,8 @@ class DeerPipePlugin(Star):
         self, event: AstrMessageEvent
     ) -> AsyncGenerator[Any, None]:
         """查看今日群打卡排行榜 (/leaderboard)."""
-        async for result in self.leaderboard_handler.handle_daily_leaderboard(
-            event, self.html_render
+        async for result in self.leaderboard_handler.handle_leaderboard(
+            event, self.html_render, LeaderboardType.DAILY
         ):
             yield result
 
@@ -502,8 +503,8 @@ class DeerPipePlugin(Star):
         self, event: AstrMessageEvent
     ) -> AsyncGenerator[Any, None]:
         """查看昨日群打卡排行榜 (/yesterday_rank)."""
-        async for result in self.leaderboard_handler.handle_yesterday_leaderboard(
-            event, self.html_render
+        async for result in self.leaderboard_handler.handle_leaderboard(
+            event, self.html_render, LeaderboardType.YESTERDAY
         ):
             yield result
 
@@ -512,8 +513,8 @@ class DeerPipePlugin(Star):
         self, event: AstrMessageEvent
     ) -> AsyncGenerator[Any, None]:
         """查看本月群打卡排行榜 (/monthly_rank)."""
-        async for result in self.leaderboard_handler.handle_monthly_leaderboard(
-            event, self.html_render
+        async for result in self.leaderboard_handler.handle_leaderboard(
+            event, self.html_render, LeaderboardType.MONTHLY
         ):
             yield result
 
