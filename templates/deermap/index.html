@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1400,height=500, initial-scale=1.0"/>
+    <link href="https://fonts.googleapis.com/css2?family=ADLaM+Display&amp;family=Nunito:wght@400;700&amp;display=swap" rel="stylesheet">
+    <style>{{ css_style | safe }}</style>
+    <title>鹿力图</title>
+</head>
+<body>
+<div class="heatmap-container">
+    <div class="header">
+        <div class="avatar-box">
+            {% if avatar_base64 %}
+            <img class="avatar" src="{{ avatar_base64 }}" alt="头像"/>
+            {% endif %}
+        </div>
+        <div class="header-content">
+            <div class="title">{{ title }}</div>
+            <div class="subtitle">DEER MAP</div>
+        </div>
+        <div class="header-deco-img">
+            <img src="{{ shot_image }}" alt="图表"/>
+        </div>
+    </div>
+
+    <div class="heatmap-wrapper">
+        <div class="heatmap">
+            <!-- Month labels -->
+            <div class="month-labels">
+                {% for month in months %}
+                <div class="month-label">{{ month }}</div>
+                {% endfor %}
+            </div>
+
+            <!-- Heatmap grid -->
+            <div class="heatmap-grid">
+                <!-- Weekday labels -->
+                <div class="weekday-labels">
+                    <div class="weekday-label"></div>
+                    <div class="weekday-label">一</div>
+                    <div class="weekday-label"></div>
+                    <div class="weekday-label">三</div>
+                    <div class="weekday-label"></div>
+                    <div class="weekday-label">五</div>
+                    <div class="weekday-label"></div>
+                </div>
+
+                <!-- Days grid -->
+                <div class="days-grid">
+                    {% for week in weeks %}
+                    <div class="week">
+                        {% for day in week %}
+                        <div class="day-cell {{ day.level }}"
+                             data-date="{{ day.date }}"
+                             data-count="{{ day.count }}">
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Legend -->
+            <div class="legend">
+                <span class="legend-label">少</span>
+                <div class="legend-cell level-0"></div>
+                <div class="legend-cell level-1"></div>
+                <div class="legend-cell level-2"></div>
+                <div class="legend-cell level-3"></div>
+                <div class="legend-cell level-4"></div>
+                <span class="legend-label">多</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats">
+        <div class="stat-item">
+            <span class="stat-value">{{ total_days }}</span>
+            <span class="stat-label">鹿天数</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-value">{{ total_count }}</span>
+            <span class="stat-label">总鹿次数</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-value">{{ max_count }}</span>
+            <span class="stat-label">单日最多</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-value">{{ avg_count }}</span>
+            <span class="stat-label">日均次数</span>
+        </div>
+    </div>
+</div>
+<script>
+// 等待字体加载完成
+if (document.fonts) {
+    Promise.all([
+        document.fonts.load('1em "ADLaM Display"').catch(function(){}),
+        document.fonts.load('1em "Nunito"').catch(function(){})
+    ]).then(function() {
+        document.documentElement.setAttribute('data-fonts-loaded', 'true');
+    }).catch(function() {
+        document.documentElement.setAttribute('data-fonts-loaded', 'true');
+    });
+} else {
+    document.documentElement.setAttribute('data-fonts-loaded', 'true');
+}
+</script>
+</body>
+</html>
