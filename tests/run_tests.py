@@ -76,7 +76,9 @@ def install_pytest() -> bool:
         return False
 
 
-def run_tests(test_files: list[str], verbose: bool = True, coverage: bool = False) -> bool:
+def run_tests(
+    test_files: list[str], verbose: bool = True, coverage: bool = False
+) -> bool:
     """运行测试."""
     plugin_dir = Path(__file__).parent
 
@@ -127,7 +129,8 @@ Examples:
         """,
     )
     parser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="store_true",
         help="显示详细输出",
     )
@@ -178,9 +181,7 @@ Examples:
 
     # 打印结果
     print()
-    print_header(
-        "All tests passed!" if all_passed else "Some tests failed!"
-    )
+    print_header("All tests passed!" if all_passed else "Some tests failed!")
 
     if all_passed:
         print("Total: 72 tests passed")

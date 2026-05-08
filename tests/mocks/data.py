@@ -215,9 +215,7 @@ class MockAstrMessageEvent:
         from astrbot.core.platform.message_type import MessageType
 
         return (
-            MessageType.GROUP_MESSAGE
-            if self._is_group
-            else MessageType.FRIEND_MESSAGE
+            MessageType.GROUP_MESSAGE if self._is_group else MessageType.FRIEND_MESSAGE
         )
 
     def get_messages(self):

@@ -115,8 +115,7 @@ class DeermapPresenter:
             return ""
 
         return (
-            "data:image/png;base64,"
-            + base64.b64encode(shot_path.read_bytes()).decode()
+            "data:image/png;base64," + base64.b64encode(shot_path.read_bytes()).decode()
         )
 
     def format_fallback_text(

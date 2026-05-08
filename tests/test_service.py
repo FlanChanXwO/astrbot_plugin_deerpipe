@@ -6,7 +6,7 @@ import datetime as dt
 import sys
 import tempfile
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -206,8 +206,6 @@ class TestBatchDeerOther:
     async def test_batch_deer_other_empty(self, service_with_mocks):
         """测试空目标列表."""
         service, db, _ = service_with_mocks
-
-        from tests.mocks import MockAstrMessageEvent, MockAt
 
         results = await service.batch_deer_other(
             sender_id="user123",

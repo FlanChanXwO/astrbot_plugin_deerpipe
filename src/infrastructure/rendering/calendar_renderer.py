@@ -5,11 +5,9 @@
 
 from __future__ import annotations
 
-import asyncio
 import calendar
 import datetime as dt
 import hashlib
-from collections.abc import Awaitable
 from pathlib import Path
 from typing import Literal, cast
 
@@ -21,7 +19,6 @@ from ...domain import (
     CHARACTER_THRESHOLD_MEDIUM,
     CalendarAssets,
     CalendarDay,
-    CalendarPayload,
 )
 from ..cache import get_cached_avatar
 from ..utils.http_utils import image_to_data_uri

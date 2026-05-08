@@ -13,18 +13,10 @@ from pydantic import BaseModel, Field
 class AIBehaviorConfig(BaseModel):
     """AI 行为配置"""
 
-    allow_ai_help_deer: bool = Field(
-        default=True, description="允许 AI 帮用户 🦌"
-    )
-    allow_ai_be_deered: bool = Field(
-        default=False, description="允许 AI 被 🦌"
-    )
-    allow_ai_help_self: bool = Field(
-        default=True, description="允许 AI 帮用户自己打卡"
-    )
-    custom_prompt: str = Field(
-        default="", description="自定义 LLM Prompt"
-    )
+    allow_ai_help_deer: bool = Field(default=True, description="允许 AI 帮用户 🦌")
+    allow_ai_be_deered: bool = Field(default=False, description="允许 AI 被 🦌")
+    allow_ai_help_self: bool = Field(default=True, description="允许 AI 帮用户自己打卡")
+    custom_prompt: str = Field(default="", description="自定义 LLM Prompt")
 
     @classmethod
     def from_dict(cls, data: dict[str, Any] | None) -> AIBehaviorConfig:
@@ -37,9 +29,7 @@ class AIBehaviorConfig(BaseModel):
 class LimitsConfig(BaseModel):
     """限制配置"""
 
-    daily_retro_limit: int = Field(
-        default=1, description="每日补🦌次数限制"
-    )
+    daily_retro_limit: int = Field(default=1, description="每日补🦌次数限制")
 
     @classmethod
     def from_dict(cls, data: dict[str, Any] | None) -> LimitsConfig:
@@ -52,12 +42,8 @@ class LimitsConfig(BaseModel):
 class CalendarConfig(BaseModel):
     """日历显示配置"""
 
-    count_display_mode: str = Field(
-        default="additive", description="打卡次数显示模式"
-    )
-    show_check_mark: bool = Field(
-        default=True, description="显示打勾图标"
-    )
+    count_display_mode: str = Field(default="additive", description="打卡次数显示模式")
+    show_check_mark: bool = Field(default=True, description="显示打勾图标")
 
     @classmethod
     def from_dict(cls, data: dict[str, Any] | None) -> CalendarConfig:
@@ -70,14 +56,11 @@ class CalendarConfig(BaseModel):
 class RenderingConfig(BaseModel):
     """渲染引擎配置"""
 
-    render_timeout: int = Field(
-        default=30, description="渲染超时时间(秒)"
-    )
-    jpeg_quality: int = Field(
-        default=95, description="JPEG 图片质量"
-    )
+    render_timeout: int = Field(default=30, description="渲染超时时间(秒)")
+    jpeg_quality: int = Field(default=95, description="JPEG 图片质量")
     use_t2i: bool = Field(
-        default=False, description="使用 AstrBot 内置 t2i 服务渲染图片，无需安装 Playwright"
+        default=False,
+        description="使用 AstrBot 内置 t2i 服务渲染图片，无需安装 Playwright",
     )
 
     @classmethod
@@ -105,14 +88,10 @@ class DeerPipePluginConfig(BaseModel):
             return cls()
 
         return cls(
-            ai_behavior=AIBehaviorConfig.from_dict(
-                raw_config.get("ai_behavior", {})
-            ),
+            ai_behavior=AIBehaviorConfig.from_dict(raw_config.get("ai_behavior", {})),
             limits=LimitsConfig.from_dict(raw_config.get("limits", {})),
             calendar=CalendarConfig.from_dict(raw_config.get("calendar", {})),
-            rendering=RenderingConfig.from_dict(
-                raw_config.get("rendering", {})
-            ),
+            rendering=RenderingConfig.from_dict(raw_config.get("rendering", {})),
         )
 
     def save(self, raw_config: dict[str, Any]) -> None:

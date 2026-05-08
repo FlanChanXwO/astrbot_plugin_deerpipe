@@ -32,7 +32,6 @@ from .src import (
     DeerPipeService,
     DeermapCommandHandler,
     LeaderboardCommandHandler,
-    LeaderboardType,
     close_aiohttp_session,
     get_config,
     get_logger,
@@ -266,13 +265,16 @@ class DeerPipePlugin(Star):
             data_dir=self.base_dir / "data",
             use_t2i=use_t2i,
         )
-        logger.info(f"HTML 渲染器已初始化: use_t2i={use_t2i}, render_timeout={render_timeout}s, jpeg_quality={jpeg_quality}")
+        logger.info(
+            f"HTML 渲染器已初始化: use_t2i={use_t2i}, render_timeout={render_timeout}s, jpeg_quality={jpeg_quality}"
+        )
 
     def _config_to_dict(self, config: AstrBotConfig) -> dict:
         """将 AstrBotConfig 转换为普通 dict.
 
         优先使用插件专用配置，如果没有则返回空 dict。
         """
+
         def _to_dict(obj) -> dict | None:
             """尝试将对象转为 dict."""
             if isinstance(obj, dict):
@@ -642,7 +644,9 @@ class DeerPipePlugin(Star):
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @filter.command("重置渲染器", alias={"reset_renderer", "重置t2i"})
-    async def reset_renderer_cmd(self, event: AstrMessageEvent) -> AsyncGenerator[Any, None]:
+    async def reset_renderer_cmd(
+        self, event: AstrMessageEvent
+    ) -> AsyncGenerator[Any, None]:
         """重置 t2i 渲染器状态，在修复 t2i 服务后使用 (/重置渲染器)."""
         try:
             # 检查当前状态

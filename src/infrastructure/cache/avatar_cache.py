@@ -8,7 +8,6 @@ from __future__ import annotations
 import asyncio
 import time
 from collections import OrderedDict
-from typing import Literal
 
 from ...shared.constants import AVATAR_CACHE_MAX_SIZE, AVATAR_CACHE_TTL
 from ..utils.http_utils import fetch_avatar_base64
@@ -94,9 +93,7 @@ async def _fetch_avatar_with_cache(
     return data
 
 
-async def get_cached_avatar(
-    user_id: str, platform_name: str | None = None
-) -> str:
+async def get_cached_avatar(user_id: str, platform_name: str | None = None) -> str:
     """获取用户头像，带 TTL 缓存和 LRU 淘汰策略，支持请求合并防止缓存击穿.
 
     Args:

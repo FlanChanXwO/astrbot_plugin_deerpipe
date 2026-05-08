@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -134,9 +133,11 @@ class LeaderboardRenderer(BaseTemplateRenderer):
             total_count = sum(count for _, count in leaderboard_data)
         total_users = len(leaderboard_data)
 
-        lines.extend([
-            "",
-            f"📈 总计: {total_users}人参与，累计打卡 {total_count}次",
-        ])
+        lines.extend(
+            [
+                "",
+                f"📈 总计: {total_users}人参与，累计打卡 {total_count}次",
+            ]
+        )
 
         return "\n".join(lines)

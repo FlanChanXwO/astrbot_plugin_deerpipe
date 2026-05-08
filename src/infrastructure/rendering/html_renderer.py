@@ -58,7 +58,12 @@ class T2IStateManager:
         if data_dir is None:
             # 默认使用插件数据目录
             from astrbot.core.utils.astrbot_path import get_astrbot_data_path
-            data_dir = Path(get_astrbot_data_path()) / "plugin_data" / "astrbot_plugin_deerpipe"
+
+            data_dir = (
+                Path(get_astrbot_data_path())
+                / "plugin_data"
+                / "astrbot_plugin_deerpipe"
+            )
 
         self.data_dir = data_dir
         self.state_file = data_dir / "renderer_state.json"
@@ -72,9 +77,17 @@ class T2IStateManager:
             if self.state_file.exists():
                 self._state = json.loads(self.state_file.read_text(encoding="utf-8"))
             else:
-                self._state = {"t2i_failures": 0, "t2i_disabled": False, "last_failure_time": None}
+                self._state = {
+                    "t2i_failures": 0,
+                    "t2i_disabled": False,
+                    "last_failure_time": None,
+                }
         except Exception:
-            self._state = {"t2i_failures": 0, "t2i_disabled": False, "last_failure_time": None}
+            self._state = {
+                "t2i_failures": 0,
+                "t2i_disabled": False,
+                "last_failure_time": None,
+            }
 
     def _save_state(self) -> None:
         """保存状态到文件（带间隔限制）."""
@@ -85,8 +98,7 @@ class T2IStateManager:
         try:
             self.data_dir.mkdir(parents=True, exist_ok=True)
             self.state_file.write_text(
-                json.dumps(self._state, ensure_ascii=False, indent=2),
-                encoding="utf-8"
+                json.dumps(self._state, ensure_ascii=False, indent=2), encoding="utf-8"
             )
             self._last_save = now
         except Exception:
@@ -130,7 +142,11 @@ class T2IStateManager:
 
     def reset(self) -> None:
         """手动重置状态（用户通过命令或配置更改后调用）."""
-        self._state = {"t2i_failures": 0, "t2i_disabled": False, "last_failure_time": None}
+        self._state = {
+            "t2i_failures": 0,
+            "t2i_disabled": False,
+            "last_failure_time": None,
+        }
         self._save_state()
 
 
@@ -297,13 +313,13 @@ class DeerPipeHTMLRenderer:
                 self._state_manager.record_t2i_success()
                 return result
             except asyncio.TimeoutError:
-                logger.warning(f"t2i 渲染超时（{self.render_timeout}秒），回退到 Playwright")
+                logger.warning(
+                    f"t2i 渲染超时（{self.render_timeout}秒），回退到 Playwright"
+                )
                 self._state_manager.record_t2i_failure()
             except Exception as e:
                 # 仅记录异常类型和简短描述，避免 base64 污染日志
-                logger.warning(
-                    f"t2i 渲染失败 ({type(e).__name__})，回退到 Playwright"
-                )
+                logger.warning(f"t2i 渲染失败 ({type(e).__name__})，回退到 Playwright")
                 self._state_manager.record_t2i_failure()
         elif not self.use_t2i:
             logger.debug("use_t2i=False，使用 Playwright 渲染")
@@ -366,9 +382,7 @@ class DeerPipeHTMLRenderer:
         try:
             from jinja2 import Template
         except ImportError:
-            raise RuntimeError(
-                "Playwright 渲染需要 jinja2，请安装: pip install jinja2"
-            )
+            raise RuntimeError("Playwright 渲染需要 jinja2，请安装: pip install jinja2")
 
         # 使用 Jinja2 渲染模板
         template = Template(html)
@@ -384,9 +398,7 @@ class DeerPipeHTMLRenderer:
                 # 等待字体加载完成（通过检查 data-fonts-loaded 属性）
                 try:
                     await page.wait_for_selector(
-                        "html[data-fonts-loaded='true']",
-                        timeout=5000,
-                        state="attached"
+                        "html[data-fonts-loaded='true']", timeout=5000, state="attached"
                     )
                 except Exception:
                     pass
@@ -407,8 +419,8 @@ class DeerPipeHTMLRenderer:
                         height: document.body.scrollHeight
                     };
                 }""")
-                page_width = dimensions['width']
-                page_height = dimensions['height']
+                page_width = dimensions["width"]
+                page_height = dimensions["height"]
                 await page.set_viewport_size(
                     {"width": page_width, "height": page_height}
                 )
