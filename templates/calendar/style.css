@@ -1,23 +1,12 @@
 html, body {
     margin: 0;
     padding: 0;
-    width: 1020px;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
 }
 
-/* Local fonts: url() will be replaced with data URI at runtime when font files exist */
-@font-face {
-    font-family: 'ADLaM Display';
-    src: url('../font/ADLaMDisplay-Regular.ttf') format('truetype');
-    font-weight: normal;
-    font-style: normal;
-    font-display: swap;
-}
-
 .container {
-    width: 1020px;
     background: #ffffff;
     overflow: hidden;
     position: relative;
@@ -53,6 +42,7 @@ html, body {
     font-weight: 800;
     color: #4e342e;
     letter-spacing: -0.5px;
+    font-family: 'ADLaM Display', sans-serif;
 }
 .subtitle {
     font-size: 19px;
@@ -61,6 +51,7 @@ html, body {
     font-weight: 700;
     margin-top: 9px;
     text-transform: uppercase;
+    font-family: 'Nunito', sans-serif;
 }
 
 .header-deco-img {
@@ -95,7 +86,7 @@ html, body {
     font-size: 18px;
     font-weight: 800;
     color: #b0bec5;
-    font-family: 'Arial', sans-serif;
+    font-family: 'Nunito', sans-serif;
 }
 .calendar-grid {
     padding: 30px;

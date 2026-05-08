@@ -19,13 +19,13 @@ from ...domain import (
     TemplateKeyError,
 )
 from ...infrastructure import (
-    CalendarRenderer,
     DatabaseManager,
     extract_mention_user_ids,
     get_logger,
     normalize_user_id,
     validate_day,
 )
+from ..presenters import CalendarPresenter
 
 logger = get_logger()
 
@@ -90,18 +90,18 @@ class DeerPipeService:
     def __init__(
         self,
         db: DatabaseManager,
-        renderer: CalendarRenderer,
+        calendar_presenter: CalendarPresenter,
         config: dict | None = None,
     ) -> None:
         """初始化服务.
 
         Args:
             db: 数据库管理器实例
-            renderer: 日历渲染器实例
+            calendar_presenter: 日历展示器实例
             config: 插件配置字典
         """
         self.db = db
-        self.renderer = renderer
+        self.calendar_presenter = calendar_presenter
         self.config = config or {}
 
     async def batch_deer_other(
@@ -271,15 +271,13 @@ class DeerPipeService:
         """
         user_id = normalize_user_id(event.get_sender_id())
         sender_name = event.get_sender_name()
-        logger.debug(
-            f"[DeerPipe] handle_set_self_help: raw user_id={user_id}, name={sender_name}, allowed={allowed}"
-        )
+        logger.debug(f"handle_set_self_help: raw user_id={user_id}, name={sender_name}, allowed={allowed}")
 
         db = await self.db.get_connection()
         try:
             await self.db.set_help_allowed(db, user_id, allowed)
             await db.commit()
-            logger.debug(f"[DeerPipe] 用户 {user_id} 设置 allow_help={allowed} 成功")
+            logger.debug(f"用户 {user_id} 设置 allow_help={allowed} 成功")
         except (OSError, RuntimeError) as exc:
             logger.error(f"set_self_help_status failed: {exc}")
             return "操作失败，请稍后重试。"
@@ -325,9 +323,7 @@ class DeerPipeService:
                 await self.db.set_help_allowed(db, target_id, allowed)
                 status_str = "允许" if allowed else "禁止"
                 logs.append(f"用户 {target_id} 被🦌策略设置为: {status_str}")
-                logger.debug(
-                    f"[DeerPipe] 管理员设置用户 {target_id} allow_help={allowed}"
-                )
+                logger.debug(f"管理员设置用户 {target_id} allow_help={allowed}")
             await db.commit()
         except (OSError, RuntimeError) as exc:
             logger.error(f"set_other_help_status failed: {exc}")
@@ -447,7 +443,7 @@ class DeerPipeService:
                 db, user_id, month_date.year, month_date.month
             )
         except (OSError, RuntimeError) as exc:
-            logger.error(f"Failed to load calendar data: {exc}")
+            logger.error(f"Failed to load calendar data ({type(exc).__name__})")
             try:
                 yield MessageTemplates.get("calendar_load_failed"), True
             except TemplateKeyError as e:
@@ -464,7 +460,7 @@ class DeerPipeService:
             count_display_mode = calendar_config.get("count_display_mode", "additive")
             show_check_mark = calendar_config.get("show_check_mark", True)
 
-            image_url = await self.renderer.render(
+            image_url = await self.calendar_presenter.present_calendar(
                 html_render_func,
                 user_id,
                 month_date.year,
@@ -476,81 +472,16 @@ class DeerPipeService:
             )
             yield image_url, False
         except (OSError, RuntimeError, ValueError) as exc:
-            logger.error(f"Calendar render failed: {exc}")
+            logger.error(f"Calendar render failed ({type(exc).__name__})")
             # 降级：返回纯文本日历
-            fallback_text = self._format_fallback_text(
+            fallback_text = self.calendar_presenter.format_fallback_text(
+                month_date.year, month_date.month, month_map
+            )
+            yield fallback_text, True
+        except TemplateKeyError as e:
+            logger.error(f"Template error: {e}")
+            fallback_text = self.calendar_presenter.format_fallback_text(
                 month_date.year, month_date.month, month_map
             )
             yield fallback_text, True
 
-    @staticmethod
-    def _format_fallback_text(year: int, month: int, month_map: dict[int, int]) -> str:
-        """生成纯文本日历.
-
-        Args:
-            year: 年份
-            month: 月份
-            month_map: 日期到打卡次数的映射
-
-        Returns:
-            格式化的纯文本日历
-        """
-        total = sum(month_map.values())
-        days_recorded = len(month_map)
-
-        # 构建日历表头
-        try:
-            header = MessageTemplates.get(
-                "fallback_calendar_header", year=year, month=month
-            )
-        except TemplateKeyError as e:
-            logger.error(f"Template error: {e}")
-            header = f"📅 {year}年{month}月 鹿历"
-        separator = "=" * 29
-
-        # 星期标题 - 使用固定宽度
-        weekday_header = "  日   一   二   三   四   五   六"
-
-        # 构建日历主体
-        cal = calendar.Calendar(firstweekday=calendar.SUNDAY)
-        lines: list[str] = []
-
-        for week in cal.monthdayscalendar(year, month):
-            week_strs: list[str] = []
-            for day in week:
-                if day == 0:
-                    week_strs.append("    ")  # 空位 4空格
-                elif day in month_map:
-                    count = month_map[day]
-                    # 有记录的日期显示 ✓+次数，居中在4字符宽度内
-                    if count == 1:
-                        week_strs.append(" ✓  ")  # 单次打卡
-                    else:
-                        # 多次打卡显示 ✓数字
-                        mark = f"✓{count}"
-                        week_strs.append(f"{mark:>4}")
-                else:
-                    # 未签到日期显示日期数字，右对齐
-                    week_strs.append(f"{day:>3} ")
-            lines.append("".join(week_strs))
-
-        calendar_body = "\n".join(lines)
-
-        # 统计信息
-        try:
-            stats = MessageTemplates.get(
-                "fallback_calendar_stats", days=days_recorded, total=total
-            )
-        except TemplateKeyError as e:
-            logger.error(f"Template error: {e}")
-            stats = f"📊 统计: 共{days_recorded}天 {total}次"
-
-        return (
-            f"{header}\n"
-            f"{separator}\n"
-            f"{weekday_header}\n"
-            f"{calendar_body}\n"
-            f"{separator}\n"
-            f"{stats}\n"
-            f"💡 带 ✓ 的为已签到日期，✓数字表示当日打卡次数"
-        )

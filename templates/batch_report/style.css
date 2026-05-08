@@ -28,6 +28,7 @@ html, body {
     color: var(--text-dark, #333);
     letter-spacing: -1px;
     margin-bottom: 8px;
+    font-family: 'ADLaM Display', sans-serif;
 }
 
 .subtitle {
@@ -36,6 +37,7 @@ html, body {
     letter-spacing: 4px;
     font-weight: 700;
     text-transform: uppercase;
+    font-family: 'Nunito', sans-serif;
 }
 
 /* === 列表区域 === */

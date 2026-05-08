@@ -36,6 +36,12 @@ class CalendarCommandHandler:
         self.service = service
         self.logger = logger
 
+    @staticmethod
+    def _schedule_temp_cleanup(html_render, file_path: str, delay_seconds: int = 60) -> None:
+        schedule = getattr(html_render, "schedule_temp_cleanup", None)
+        if callable(schedule):
+            schedule(file_path, delay_seconds)
+
     async def handle_calendar_query(
         self,
         event: AstrMessageEvent,
@@ -141,22 +147,32 @@ class CalendarCommandHandler:
         if at_ids:
             target_id = str(at_list[0].qq)
             target_name = at_map.get(target_id, target_id)
-            async for result, is_text in self.service.render_calendar(
-                event, month_date, html_render, user_id=target_id
-            ):
-                if is_text:
-                    yield event.plain_result(
-                        f"{target_name} {other_title_suffix}：\n{result}"
-                    )
-                else:
-                    yield event.image_result(result)
+            try:
+                async for result, is_text in self.service.render_calendar(
+                    event, month_date, html_render, user_id=target_id
+                ):
+                    if is_text:
+                        yield event.plain_result(
+                            f"{target_name} {other_title_suffix}：\n{result}"
+                        )
+                    else:
+                        self._schedule_temp_cleanup(html_render, result)
+                        yield event.image_result(result)
+            except Exception:
+                logger.error(f"查询 {target_name} 日历渲染异常")
+                yield event.plain_result(f"{target_name} 的日历数据加载失败。")
             return
 
-        async for result, is_text in self.service.render_calendar(
-            event, month_date, html_render
-        ):
-            if is_text:
-                prefix = f"{self_title}\n" if self_title else ""
-                yield event.plain_result(f"{prefix}{result}")
-            else:
-                yield event.image_result(result)
+        try:
+            async for result, is_text in self.service.render_calendar(
+                event, month_date, html_render
+            ):
+                if is_text:
+                    prefix = f"{self_title}\n" if self_title else ""
+                    yield event.plain_result(f"{prefix}{result}")
+                else:
+                    self._schedule_temp_cleanup(html_render, result)
+                    yield event.image_result(result)
+        except Exception:
+            logger.error("查询日历渲染异常")
+            yield event.plain_result("日历数据加载失败。")

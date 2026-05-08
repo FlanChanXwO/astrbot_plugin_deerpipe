@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=1020, initial-scale=1.0"/>
+    <link href="https://fonts.googleapis.com/css2?family=ADLaM+Display&amp;family=Nunito:wght@400;700&amp;display=swap" rel="stylesheet">
     <style>{{ css_style | safe }}</style>
     <title>群鹿排行榜</title>
 </head>
@@ -82,5 +83,20 @@
     </div>
     {% endif %}
 </div>
+<script>
+// 等待字体加载完成
+if (document.fonts) {
+    Promise.all([
+        document.fonts.load('1em "ADLaM Display"').catch(function(){}),
+        document.fonts.load('1em "Nunito"').catch(function(){})
+    ]).then(function() {
+        document.documentElement.setAttribute('data-fonts-loaded', 'true');
+    }).catch(function() {
+        document.documentElement.setAttribute('data-fonts-loaded', 'true');
+    });
+} else {
+    document.documentElement.setAttribute('data-fonts-loaded', 'true');
+}
+</script>
 </body>
 </html>

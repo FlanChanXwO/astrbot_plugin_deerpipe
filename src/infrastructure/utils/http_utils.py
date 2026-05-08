@@ -59,7 +59,7 @@ async def close_aiohttp_session() -> None:
     global _aiohttp_session
     if _aiohttp_session is not None and not _aiohttp_session.closed:
         await _aiohttp_session.close()
-        logger.debug("[DeerPipe] aiohttp ClientSession 已关闭")
+        logger.debug("aiohttp ClientSession 已关闭")
     _aiohttp_session = None
 
 

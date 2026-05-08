@@ -8,14 +8,6 @@ html, body {
     text-rendering: optimizeLegibility;
 }
 
-@font-face {
-    font-family: 'ADLaM Display';
-    src: url('../font/ADLaMDisplay-Regular.ttf') format('truetype');
-    font-weight: normal;
-    font-style: normal;
-    font-display: swap;
-}
-
 .leaderboard-container {
     width: 1020px;
     background: #ffffff;
@@ -60,6 +52,7 @@ html, body {
     color: #4e342e;
     letter-spacing: -0.5px;
     margin-bottom: 9px;
+    font-family: 'ADLaM Display', sans-serif;
 }
 
 .subtitle {
@@ -68,6 +61,7 @@ html, body {
     letter-spacing: 2px;
     font-weight: 700;
     text-transform: uppercase;
+    font-family: 'Nunito', sans-serif;
 }
 
 .header-deco {

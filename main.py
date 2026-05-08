@@ -22,7 +22,7 @@ from .src import (
     LLM_TOOLS,
     AdminCommandHandler,
     CalendarCommandHandler,
-    CalendarRenderer,
+    CalendarPresenter,
     DatabaseManager,
     DataCommandHandler,
     DataManager,
@@ -30,10 +30,15 @@ from .src import (
     DeerPipeHTMLRenderer,
     DeerPipeLLMTools,
     DeerPipeService,
+    DeermapCommandHandler,
     LeaderboardCommandHandler,
     LeaderboardType,
     close_aiohttp_session,
+    get_config,
     get_logger,
+    init_config,
+    ResourceLoader,
+    TemplateRenderer,
 )
 from .src.domain.datamodels import ToolResult
 
@@ -50,13 +55,33 @@ class DeerPipePlugin(Star):
         # 读取插件配置 (转换为 dict)
         self.config = self._config_to_dict(config)
 
-        # 初始化数据库、渲染器和数据管理器
+        # 备用：如果配置为空，尝试从 context 获取
+        if not self.config and hasattr(context, "config"):
+            ctx_config = getattr(context, "config", None)
+            if ctx_config is not None:
+                self.config = self._config_to_dict(ctx_config)
+                logger.info(f"从 context.config 读取配置: {len(self.config)} 个顶级键")
+
+        # 初始化类型安全的配置单例
+        init_config(self.config)
+        cfg = get_config()
+
+        # 初始化数据库和基础设施
         db_path = StarTools.get_data_dir(self.name) / "deerpipe.db"
         self.db = DatabaseManager(db_path)
-        self.renderer = CalendarRenderer(Path(__file__).parent)
+
+        # 初始化基础设施
+        base_dir = Path(__file__).parent
+        resource_loader = ResourceLoader(base_dir)
+        template_renderer = TemplateRenderer()
+
+        # 初始化展示器
+        calendar_presenter = CalendarPresenter(resource_loader, template_renderer)
+
         self.data_manager = DataManager(self.db)
-        # 初始化业务服务（传入配置）
-        self.service = DeerPipeService(self.db, self.renderer, self.config)
+
+        # 初始化业务服务（传入展示器）
+        self.service = DeerPipeService(self.db, calendar_presenter, self.config)
 
         # 初始化AI工具
         self.llm_tools = DeerPipeLLMTools(
@@ -72,38 +97,62 @@ class DeerPipePlugin(Star):
         self.leaderboard_handler = LeaderboardCommandHandler(
             self.service, self.db, self.base_dir
         )
+        self.deermap_handler = DeermapCommandHandler(self.db, self.base_dir)
 
-        # 初始化 HTML 渲染器（根据配置选择 t2i 或 playwright）
-        rendering_cfg = self.config.get("rendering", {})
-        use_t2i = rendering_cfg.get("use_t2i", False)  # 默认使用 Playwright
-        jpeg_quality = rendering_cfg.get("jpeg_quality", 95)
+        # 初始化 HTML 渲染器
+        render_timeout = cfg.render_timeout
+        jpeg_quality = cfg.jpeg_quality
+        use_t2i = cfg.use_t2i
 
-        # 诊断日志：输出配置值
-        logger.info(f"[DeerPipe] 插件名称: {self.name}")
-        logger.info(f"[DeerPipe] 完整配置: {self.config}")
-        logger.info(f"[DeerPipe] rendering_cfg: {rendering_cfg}")
-        logger.info(f"[DeerPipe] use_t2i 配置值: {use_t2i}")
-
-        self.html_render = DeerPipeHTMLRenderer(use_t2i=use_t2i, jpeg_quality=jpeg_quality)
-        logger.info(f"[DeerPipe] HTML 渲染器已初始化: use_t2i={use_t2i}, jpeg_quality={jpeg_quality}")
+        self.html_render = DeerPipeHTMLRenderer(
+            render_timeout=render_timeout,
+            jpeg_quality=jpeg_quality,
+            data_dir=self.base_dir / "data",
+            use_t2i=use_t2i,
+        )
+        logger.info(f"HTML 渲染器已初始化: use_t2i={use_t2i}, render_timeout={render_timeout}s, jpeg_quality={jpeg_quality}")
 
     def _config_to_dict(self, config: AstrBotConfig) -> dict:
         """将 AstrBotConfig 转换为普通 dict.
 
         优先使用插件专用配置，如果没有则返回空 dict。
         """
+        def _to_dict(obj) -> dict | None:
+            """尝试将对象转为 dict."""
+            if isinstance(obj, dict):
+                return obj
+            # 处理 AttrDict / Box 等类似 dict 的对象
+            if hasattr(obj, "items") and callable(getattr(obj, "items")):
+                try:
+                    return dict(obj.items())
+                except (TypeError, ValueError):
+                    pass
+            if hasattr(obj, "__dict__"):
+                result = vars(obj)
+                if result:
+                    return result
+            return None
+
+        # 1. 尝试从 config 中获取插件专属配置
         if hasattr(config, "get"):
-            # 尝试获取插件配置
             plugin_config = config.get(self.name)
-            if plugin_config and isinstance(plugin_config, dict):
-                return plugin_config
-        # 如果 config 是 dict 类型，检查是否包含插件配置键
-        if isinstance(config, dict):
-            plugin_config = config.get(self.name)
-            if isinstance(plugin_config, dict):
-                return plugin_config
-            # 不含插件配置键时返回空 dict，而不是整个 config
-            return {}
+            if plugin_config is not None:
+                result = _to_dict(plugin_config)
+                if result is not None:
+                    return result
+
+        # 2. 如果 config 本身是 dict 类型
+        cfg_dict = _to_dict(config)
+        if cfg_dict is not None:
+            # 检查是否包含插件配置键
+            if self.name in cfg_dict:
+                inner = _to_dict(cfg_dict[self.name])
+                if inner is not None:
+                    return inner
+            # 不含插件配置键时，可能 config 本身就是插件配置
+            # (即直接传递了插件配置而不是整个 AstrBot 配置)
+            return cfg_dict
+
         return {}
 
     async def terminate(self):
@@ -118,17 +167,14 @@ class DeerPipePlugin(Star):
     @filter.on_llm_request()
     async def on_llm_request(self, event: AstrMessageEvent, req: ProviderRequest):
         """在 LLM 请求时附加自定义 prompt."""
-        ai_config = self.config.get("ai_behavior", {})
-        custom_prompt = (
-            ai_config.get("custom_prompt", "") if isinstance(ai_config, dict) else ""
-        )
+        custom_prompt = get_config().custom_prompt
         if custom_prompt:
             logger.debug("当前 custom_prompt 长度: %d", len(custom_prompt))
             current_prompt = req.system_prompt or ""
             logger.debug("当前 system_prompt 长度: %d", len(current_prompt))
             req.system_prompt = f"{current_prompt}\n\n{custom_prompt}"
             logger.debug(
-                "已追加 custom_prompt，当前 system_prompt 长度: %d",
+                "��追加 custom_prompt，当前 system_prompt 长度: %d",
                 len(req.system_prompt),
             )
 
@@ -141,6 +187,11 @@ class DeerPipePlugin(Star):
                 logger.info(f"已移除LLM工具: {tool_name}")
         except (AttributeError, RuntimeError) as e:
             logger.error(f"移除LLM工具失败: {e}")
+
+    def _schedule_temp_cleanup(self, file_path: str, delay_seconds: int) -> None:
+        schedule = getattr(self.html_render, "schedule_temp_cleanup", None)
+        if callable(schedule):
+            schedule(file_path, delay_seconds)
 
     @staticmethod
     def _is_send_ack_timeout(exc: Exception) -> bool:
@@ -169,7 +220,10 @@ class DeerPipePlugin(Star):
                 await event.send(event.plain_result(cal_result))
             else:
                 await event.send(event.image_result(cal_result))
+                self._schedule_temp_cleanup(cal_result, 0)
         except (OSError, RuntimeError) as exc:
+            if not is_text:
+                self._schedule_temp_cleanup(cal_result, 60)
             if self._is_send_ack_timeout(exc):
                 logger.info(f"{tool_name} calendar send ack timeout: {exc}")
                 result.append_delivery_warning("SEND_ACK_TIMEOUT_MAY_DELIVERED", exc)
@@ -389,6 +443,34 @@ class DeerPipePlugin(Star):
         if result:
             yield event.plain_result(result)
 
+    @filter.permission_type(filter.PermissionType.ADMIN)
+    @filter.command("重置渲染器", alias={"reset_renderer", "重置t2i"})
+    async def reset_renderer_cmd(self, event: AstrMessageEvent) -> AsyncGenerator[Any, None]:
+        """重置 t2i 渲染器状态，在修复 t2i 服务后使用 (/重置渲染器)."""
+        try:
+            # 检查当前状态
+            was_disabled = self.html_render.t2i_disabled
+            failure_count = self.html_render.t2i_failures
+
+            # 重置状态
+            self.html_render.reset_t2i_state()
+
+            if was_disabled:
+                yield event.plain_result(
+                    "✅ 已重置 t2i 渲染器状态\n"
+                    f"📊 之前状态: 已禁用（连续失败 {failure_count} 次）\n"
+                    "🔄 现在将重新尝试使用 t2i 渲染"
+                )
+            else:
+                yield event.plain_result(
+                    "✅ 已重置 t2i 渲染器状态\n"
+                    f"📊 之前失败次数: {failure_count}\n"
+                    "✨ 渲染器状态正常"
+                )
+        except Exception as e:
+            logger.error(f"重置渲染器失败: {e}")
+            yield event.plain_result(f"❌ 重置渲染器失败: {e}")
+
     @filter.command("retro_deer", alias={"补鹿", "补🦌", "补撸", "补撸🦌"})
     async def retro_deer_cmd(
         self, event: AstrMessageEvent, day: int
@@ -486,44 +568,44 @@ class DeerPipePlugin(Star):
     # ==================================================================
     # Leaderboard commands
     # ==================================================================
-    @filter.command(
-        "deer_rank", alias={"鹿排行榜", "鹿排名", "鹿榜🦌排行榜", "🦌排名", "🦌榜"}
-    )
-    async def leaderboard_cmd(
-        self, event: AstrMessageEvent
-    ) -> AsyncGenerator[Any, None]:
-        """查看今日群打卡排行榜 (/leaderboard)."""
-        async for result in self.leaderboard_handler.handle_leaderboard(
-            event, self.html_render, LeaderboardType.DAILY
-        ):
-            yield result
-
-    @filter.command("deer_yesterday_rank", alias={"昨日鹿榜", "昨日🦌榜"})
-    async def yesterday_rank_cmd(
-        self, event: AstrMessageEvent
-    ) -> AsyncGenerator[Any, None]:
-        """查看昨日群打卡排行榜 (/yesterday_rank)."""
-        async for result in self.leaderboard_handler.handle_leaderboard(
-            event, self.html_render, LeaderboardType.YESTERDAY
-        ):
-            yield result
-
-    @filter.command("deer_monthly_rank", alias={"鹿月榜", "🦌月榜"})
-    async def monthly_rank_cmd(
-        self, event: AstrMessageEvent
-    ) -> AsyncGenerator[Any, None]:
-        """查看本月群打卡排行榜 (/monthly_rank)."""
-        async for result in self.leaderboard_handler.handle_leaderboard(
-            event, self.html_render, LeaderboardType.MONTHLY
-        ):
-            yield result
+    # @filter.command(
+    #     "deer_rank", alias={"鹿排行榜", "鹿排名", "鹿榜🦌排行榜", "🦌排名", "🦌榜"}
+    # )
+    # async def leaderboard_cmd(
+    #     self, event: AstrMessageEvent
+    # ) -> AsyncGenerator[Any, None]:
+    #     """查看今日群打卡排行榜 (/leaderboard)."""
+    #     async for result in self.leaderboard_handler.handle_leaderboard(
+    #         event, self.html_render, LeaderboardType.DAILY
+    #     ):
+    #         yield result
+    #
+    # @filter.command("deer_yesterday_rank", alias={"昨日鹿榜", "昨日🦌榜"})
+    # async def yesterday_rank_cmd(
+    #     self, event: AstrMessageEvent
+    # ) -> AsyncGenerator[Any, None]:
+    #     """查看昨日群打卡排行榜 (/yesterday_rank)."""
+    #     async for result in self.leaderboard_handler.handle_leaderboard(
+    #         event, self.html_render, LeaderboardType.YESTERDAY
+    #     ):
+    #         yield result
+    #
+    # @filter.command("deer_monthly_rank", alias={"鹿月榜", "🦌月榜"})
+    # async def monthly_rank_cmd(
+    #     self, event: AstrMessageEvent
+    # ) -> AsyncGenerator[Any, None]:
+    #     """查看本月群打卡排行榜 (/monthly_rank)."""
+    #     async for result in self.leaderboard_handler.handle_leaderboard(
+    #         event, self.html_render, LeaderboardType.MONTHLY
+    #     ):
+    #         yield result
 
     @filter.command("deer_map", alias={"鹿力图", "鹿年历", "🦌力图"})
     async def deermap_cmd(
         self, event: AstrMessageEvent, year: int | None = None
     ) -> AsyncGenerator[Any, None]:
-        """查看年度打卡热力图 (/deermap [年份])."""
-        async for result in self.leaderboard_handler.handle_deermap(
+        """查看年度打卡鹿力图 (/deermap [年份])."""
+        async for result in self.deermap_handler.handle_deermap(
             event, self.html_render, year
         ):
             yield result

@@ -8,6 +8,7 @@ from .base import CommandHandler
 from .calendar_cmd import CalendarCommandHandler
 from .data_cmd import DataCommandHandler
 from .deer_cmd import DeerCommandHandler
+from .deermap_cmd import DeermapCommandHandler
 from .leaderboard_cmd import LeaderboardCommandHandler, LeaderboardType
 
 __all__ = [
@@ -18,4 +19,5 @@ __all__ = [
     "DataCommandHandler",
     "LeaderboardCommandHandler",
     "LeaderboardType",
+    "DeermapCommandHandler",
 ]

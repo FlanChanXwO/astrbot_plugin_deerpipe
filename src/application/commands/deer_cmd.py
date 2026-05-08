@@ -12,9 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 from astrbot.core.message.components import At
 from astrbot.core.platform.message_type import MessageType
-from data.plugins.astrbot_plugin_deerpipe.src.application.services.deer_service import (
-    DeerResult,
-)
+from ...application.services.deer_service import DeerResult
 
 from ...domain import TEMPLATE_GROUP_ONLY
 from ...infrastructure import extract_mention_user_ids, get_logger
@@ -42,6 +40,12 @@ class DeerCommandHandler:
         """
         self.service = service
         self.logger = logger
+
+    @staticmethod
+    def _schedule_temp_cleanup(html_render, file_path: str, delay_seconds: int = 60) -> None:
+        schedule = getattr(html_render, "schedule_temp_cleanup", None)
+        if callable(schedule):
+            schedule(file_path, delay_seconds)
 
     async def handle_deer_self(self, event: AstrMessageEvent) -> str:
         """处理自我打卡.
@@ -154,21 +158,26 @@ class DeerCommandHandler:
                     yield event.plain_result(f"❌ 无法帮 {target_name} 🦌：{reason}")
                     return
 
-                async for cal_result, is_text in self.service.render_calendar(
-                    event,
-                    dt.date.today(),
-                    html_render,
-                    user_id=result_data["user_id"],
-                ):
-                    if is_text:
-                        yield event.plain_result(f"成功帮{target_name}🦌了")
-                        yield event.plain_result(cal_result)
-                    else:
-                        yield (
-                            event.make_result()
-                            .message(f"成功帮{target_name}🦌了")
-                            .file_image(cal_result)
-                        )
+                try:
+                    async for cal_result, is_text in self.service.render_calendar(
+                        event,
+                        dt.date.today(),
+                        html_render,
+                        user_id=result_data["user_id"],
+                    ):
+                        if is_text:
+                            yield event.plain_result(f"成功帮{target_name}🦌了")
+                            yield event.plain_result(cal_result)
+                        else:
+                            self._schedule_temp_cleanup(html_render, cal_result)
+                            yield (
+                                event.make_result()
+                                .message(f"成功帮{target_name}🦌了")
+                                .file_image(cal_result)
+                            )
+                except Exception:
+                    logger.error("帮🦌日历渲染异常")
+                    yield event.plain_result(f"成功帮{target_name}🦌了")
                 return
 
             # 批量帮🦌
@@ -179,6 +188,7 @@ class DeerCommandHandler:
             if image_url:
                 total = len(results)
                 msg = f"批量帮🦌完成！成功 {success_count}/{total} 人"
+                self._schedule_temp_cleanup(html_render, image_url)
                 yield event.make_result().message(msg).file_image(image_url)
             else:
                 lines = [f"批量帮🦌结果（{success_count}/{len(results)} 成功）："]
@@ -190,14 +200,19 @@ class DeerCommandHandler:
 
         # 自我打卡
         result = await self.handle_deer_self(event)
-        async for cal_result, is_text in self.service.render_calendar(
-            event, dt.date.today(), html_render
-        ):
-            if is_text:
-                yield event.plain_result(result)
-                yield event.plain_result(cal_result)
-            else:
-                yield event.make_result().message(result).file_image(cal_result)
+        try:
+            async for cal_result, is_text in self.service.render_calendar(
+                event, dt.date.today(), html_render
+            ):
+                if is_text:
+                    yield event.plain_result(result)
+                    yield event.plain_result(cal_result)
+                else:
+                    self._schedule_temp_cleanup(html_render, cal_result)
+                    yield event.make_result().message(result).file_image(cal_result)
+        except Exception:
+            logger.error("自我打卡日历渲染异常")
+            yield event.plain_result(result)
 
     async def _render_batch_report(
         self, results: list[dict], success_count: int, html_render

@@ -14,7 +14,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from infrastructure.persistence.database import DatabaseManager
-from infrastructure.rendering.renderer import CalendarRenderer
+from application.presenters import CalendarPresenter
 from application.services.deer_service import DeerPipeService, MessageTemplates
 
 
@@ -25,10 +25,10 @@ def service_with_mocks(plugin_config):
         db_path = f.name
 
     db = DatabaseManager(db_path)
-    renderer = MagicMock(spec=CalendarRenderer)
-    service = DeerPipeService(db, renderer, plugin_config)
+    calendar_presenter = MagicMock(spec=CalendarPresenter)
+    service = DeerPipeService(db, calendar_presenter, plugin_config)
 
-    yield service, db, renderer
+    yield service, db, calendar_presenter
 
     # 清理
     import os

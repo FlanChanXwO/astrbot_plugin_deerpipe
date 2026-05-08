@@ -673,7 +673,7 @@ class DatabaseManager:
         user_id: str,
         year: int,
     ) -> dict[str, int]:
-        """获取用户指定年份的每日打卡统计（用于热力图）.
+        """获取用户指定年份的每日打卡统计（用于鹿力图）.
 
         Args:
             db: 数据库连接对象
@@ -707,7 +707,7 @@ class DatabaseManager:
         group_id: str,
         year: int,
     ) -> dict[str, int]:
-        """获取群组指定年份的每日总打卡统计（用于群热力图）.
+        """获取群组指定年份的每日总打卡统计（用于群鹿力图）.
 
         Args:
             db: 数据库连接对象

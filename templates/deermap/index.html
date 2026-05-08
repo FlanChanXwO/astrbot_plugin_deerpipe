@@ -2,7 +2,8 @@
 <html lang="zh">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=1020, initial-scale=1.0"/>
+    <meta name="viewport" content="width=1400,height=500, initial-scale=1.0"/>
+    <link href="https://fonts.googleapis.com/css2?family=ADLaM+Display&amp;family=Nunito:wght@400;700&amp;display=swap" rel="stylesheet">
     <style>{{ css_style | safe }}</style>
     <title>鹿力图</title>
 </head>
@@ -25,16 +26,10 @@
 
     <div class="heatmap-wrapper">
         <div class="heatmap">
-            <!-- Month labels - 每周显示对应月份 -->
+            <!-- Month labels -->
             <div class="month-labels">
-                {% for week_idx in range(weeks|length) %}
-                    {% set prev_month = week_to_month[week_idx - 1] if week_idx > 0 else -1 %}
-                    {% set curr_month = week_to_month[week_idx] %}
-                    {% if curr_month != prev_month %}
-                        <div class="month-label">{{ months[curr_month] }}</div>
-                    {% else %}
-                        <div class="month-spacer"></div>
-                    {% endif %}
+                {% for month in months %}
+                <div class="month-label">{{ month }}</div>
                 {% endfor %}
             </div>
 
@@ -65,17 +60,17 @@
                     {% endfor %}
                 </div>
             </div>
-        </div>
 
-        <!-- Legend -->
-        <div class="legend">
-            <span class="legend-label">少</span>
-            <div class="legend-cell level-0"></div>
-            <div class="legend-cell level-1"></div>
-            <div class="legend-cell level-2"></div>
-            <div class="legend-cell level-3"></div>
-            <div class="legend-cell level-4"></div>
-            <span class="legend-label">多</span>
+            <!-- Legend -->
+            <div class="legend">
+                <span class="legend-label">少</span>
+                <div class="legend-cell level-0"></div>
+                <div class="legend-cell level-1"></div>
+                <div class="legend-cell level-2"></div>
+                <div class="legend-cell level-3"></div>
+                <div class="legend-cell level-4"></div>
+                <span class="legend-label">多</span>
+            </div>
         </div>
     </div>
 
@@ -98,5 +93,20 @@
         </div>
     </div>
 </div>
+<script>
+// 等待字体加载完成
+if (document.fonts) {
+    Promise.all([
+        document.fonts.load('1em "ADLaM Display"').catch(function(){}),
+        document.fonts.load('1em "Nunito"').catch(function(){})
+    ]).then(function() {
+        document.documentElement.setAttribute('data-fonts-loaded', 'true');
+    }).catch(function() {
+        document.documentElement.setAttribute('data-fonts-loaded', 'true');
+    });
+} else {
+    document.documentElement.setAttribute('data-fonts-loaded', 'true');
+}
+</script>
 </body>
 </html>
