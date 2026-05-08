@@ -17,7 +17,7 @@ from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.provider import ProviderRequest
 from astrbot.api.star import Context, Star, StarTools
 from astrbot.core import AstrBotConfig
-from astrbot.core.message.components import Plain
+from astrbot.core.message.components import At, Plain
 
 from .src import (
     LLM_TOOLS,
@@ -875,6 +875,13 @@ class DeerPipePlugin(Star):
         """纯文本打卡命令（不带/前缀）."""
         if self._is_explicit_slash_command(event):
             return
+
+        # 消息中包含 Bot @ 时，deer_cmd 已处理，跳过避免重复提示
+        self_id = str(event.get_self_id()) if event.get_self_id() else None
+        if self_id:
+            for comp in event.get_messages():
+                if isinstance(comp, At) and str(comp.qq) == self_id:
+                    return
 
         async for result in self.deer_handler.run_deer_checkin(event, self.html_render):
             yield result
