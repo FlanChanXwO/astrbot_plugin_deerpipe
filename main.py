@@ -8,6 +8,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 from collections.abc import AsyncGenerator
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
