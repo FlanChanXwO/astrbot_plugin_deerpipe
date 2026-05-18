@@ -27,20 +27,23 @@ from .src import (
     DataCommandHandler,
     DataManager,
     DeerCommandHandler,
+    DeermapCommandHandler,
     DeerPipeHTMLRenderer,
     DeerPipeLLMTools,
     DeerPipeService,
-    DeermapCommandHandler,
     LeaderboardCommandHandler,
-    LeaderboardType,
+    ResourceLoader,
+    TemplateRenderer,
     close_aiohttp_session,
     get_config,
     get_logger,
     init_config,
-    ResourceLoader,
-    TemplateRenderer,
 )
 from .src.domain.datamodels import ToolResult
+from .src.shared.constants import (
+    PLAIN_CALENDAR_TRIGGER_PATTERN,
+    PLAIN_DEER_TRIGGER_PATTERN,
+)
 
 logger = get_logger()
 
@@ -110,13 +113,16 @@ class DeerPipePlugin(Star):
             data_dir=self.base_dir / "data",
             use_t2i=use_t2i,
         )
-        logger.info(f"HTML 渲染器已初始化: use_t2i={use_t2i}, render_timeout={render_timeout}s, jpeg_quality={jpeg_quality}")
+        logger.info(
+            f"HTML 渲染器已初始化: use_t2i={use_t2i}, render_timeout={render_timeout}s, jpeg_quality={jpeg_quality}"
+        )
 
     def _config_to_dict(self, config: AstrBotConfig) -> dict:
         """将 AstrBotConfig 转换为普通 dict.
 
         优先使用插件专用配置，如果没有则返回空 dict。
         """
+
         def _to_dict(obj) -> dict | None:
             """尝试将对象转为 dict."""
             if isinstance(obj, dict):
@@ -445,7 +451,9 @@ class DeerPipePlugin(Star):
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @filter.command("重置渲染器", alias={"reset_renderer", "重置t2i"})
-    async def reset_renderer_cmd(self, event: AstrMessageEvent) -> AsyncGenerator[Any, None]:
+    async def reset_renderer_cmd(
+        self, event: AstrMessageEvent
+    ) -> AsyncGenerator[Any, None]:
         """重置 t2i 渲染器状态，在修复 t2i 服务后使用 (/重置渲染器)."""
         try:
             # 检查当前状态
@@ -666,7 +674,7 @@ class DeerPipePlugin(Star):
 
         return None
 
-    @filter.regex(r"^(?!/)(🦌|鹿|撸|撸🦌)(?!历)")
+    @filter.regex(PLAIN_DEER_TRIGGER_PATTERN)
     async def plain_deer_merged_cmd(
         self, event: AstrMessageEvent
     ) -> AsyncGenerator[Any, None]:
@@ -677,7 +685,7 @@ class DeerPipePlugin(Star):
         async for result in self.deer_handler.run_deer_checkin(event, self.html_render):
             yield result
 
-    @filter.regex(r"^(?!/)(上月)?(\d{4}年\d{1,2}月)?[🦌鹿撸](历|🦌历)$")
+    @filter.regex(PLAIN_CALENDAR_TRIGGER_PATTERN)
     async def plain_calendar_merged_cmd(
         self, event: AstrMessageEvent
     ) -> AsyncGenerator[Any, None]:

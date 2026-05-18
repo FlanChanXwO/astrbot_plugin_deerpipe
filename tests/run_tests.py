@@ -19,9 +19,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 # 测试文件列表
 TEST_FILES = [
+    "test_plain_message_patterns.py",
     "test_standalone.py",
     "test_extended.py",
 ]
@@ -41,6 +41,7 @@ def print_separator() -> None:
 
 def check_python() -> bool:
     """检查 Python 版本."""
+    # ruff: noqa: UP036 - 该脚本保留 3.8+ 兼容检查，和仓库最低运行版本无关。
     if sys.version_info < (3, 8):
         print(f"[ERROR] Python 3.8+ required, current: {sys.version}")
         return False
@@ -76,12 +77,13 @@ def install_pytest() -> bool:
         return False
 
 
-def run_tests(test_files: list[str], verbose: bool = True, coverage: bool = False) -> bool:
+def run_tests(
+    test_files: list[str], verbose: bool = True, coverage: bool = False
+) -> bool:
     """运行测试."""
     plugin_dir = Path(__file__).parent
 
     all_passed = True
-    total_tests = 0
 
     for test_file in test_files:
         test_path = plugin_dir / test_file
@@ -113,6 +115,34 @@ def run_tests(test_files: list[str], verbose: bool = True, coverage: bool = Fals
     return all_passed
 
 
+def count_tests(test_files: list[str]) -> int:
+    """统计配置测试文件中的测试数量."""
+    plugin_dir = Path(__file__).parent
+    total = 0
+
+    for test_file in test_files:
+        test_path = plugin_dir / test_file
+        if not test_path.exists():
+            continue
+
+        result = subprocess.run(
+            [sys.executable, "-m", "pytest", str(test_path), "--collect-only", "-q"],
+            cwd=plugin_dir,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            continue
+
+        total += sum(
+            1
+            for line in result.stdout.splitlines()
+            if "::test_" in line and not line.startswith("<")
+        )
+
+    return total
+
+
 def main() -> int:
     """主函数."""
     parser = argparse.ArgumentParser(
@@ -127,7 +157,8 @@ Examples:
         """,
     )
     parser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="store_true",
         help="显示详细输出",
     )
@@ -178,12 +209,12 @@ Examples:
 
     # 打印结果
     print()
-    print_header(
-        "All tests passed!" if all_passed else "Some tests failed!"
-    )
+    print_header("All tests passed!" if all_passed else "Some tests failed!")
 
     if all_passed:
-        print("Total: 72 tests passed")
+        total_tests = count_tests(TEST_FILES)
+        if total_tests:
+            print(f"Total: {total_tests} tests passed")
         return 0
     else:
         return 1
