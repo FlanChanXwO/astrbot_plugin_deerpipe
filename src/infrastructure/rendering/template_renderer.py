@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 from ..utils.logger import get_logger
@@ -54,7 +53,8 @@ class TemplateRenderer:
                 html,
                 payload,
                 return_url=True,
-                options=options or {
+                options=options
+                or {
                     "type": "png",
                     "full_page": True,
                     "scale": "device",

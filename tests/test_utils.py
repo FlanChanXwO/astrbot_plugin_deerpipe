@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 
 from src.infrastructure.utils import (
     extract_mention_user_ids,

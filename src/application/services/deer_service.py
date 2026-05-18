@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import calendar
 import datetime as dt
 from typing import TypedDict
 
@@ -271,7 +270,9 @@ class DeerPipeService:
         """
         user_id = normalize_user_id(event.get_sender_id())
         sender_name = event.get_sender_name()
-        logger.debug(f"handle_set_self_help: raw user_id={user_id}, name={sender_name}, allowed={allowed}")
+        logger.debug(
+            f"handle_set_self_help: raw user_id={user_id}, name={sender_name}, allowed={allowed}"
+        )
 
         db = await self.db.get_connection()
         try:
@@ -484,4 +485,3 @@ class DeerPipeService:
                 month_date.year, month_date.month, month_map
             )
             yield fallback_text, True
-

@@ -6,8 +6,6 @@
 from __future__ import annotations
 
 import datetime as dt
-from collections.abc import Awaitable
-from pathlib import Path
 from typing import Literal
 
 from ...domain.services import CalendarDataBuilder
@@ -83,9 +81,7 @@ class CalendarPresenter:
         character_index = self.data_builder.select_character_index(
             sum(month_map.values()), user_id
         )
-        count_mode = self.data_builder.validate_count_display_mode(
-            count_display_mode
-        )
+        count_mode = self.data_builder.validate_count_display_mode(count_display_mode)
 
         # 3. 加载资源（基础设施）
         avatar_b64 = await get_cached_avatar(user_id, platform_name)
@@ -141,7 +137,6 @@ class CalendarPresenter:
         Returns:
             格式化的纯文本日历
         """
-        import calendar
 
         total = sum(month_map.values())
         days_recorded = len(month_map)

@@ -45,22 +45,17 @@ __all__ = [
     "get_config",
     "init_config",
     "refresh_config",
-
     # Persistence
     "DatabaseManager",
-
     # Cache
     "get_cached_avatar",
-
     # Resources
     "ResourceLoader",
-
     # Rendering
     "DeerPipeHTMLRenderer",
     "TemplateRenderer",
     "get_html_renderer",
     "reset_html_renderer",
-
     # Utils
     "close_aiohttp_session",
     "extract_mention_user_ids",

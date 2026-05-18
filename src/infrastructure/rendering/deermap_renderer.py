@@ -51,8 +51,8 @@ class DeermapRenderer(BaseTemplateRenderer):
             渲染数据字典
         """
         # 构建热力图数据
-        weeks_data, months, month_start_indices, week_to_month = self._build_deermap_data(
-            stats_data, year
+        weeks_data, months, month_start_indices, week_to_month = (
+            self._build_deermap_data(stats_data, year)
         )
 
         # 计算统计信息
@@ -94,8 +94,7 @@ class DeermapRenderer(BaseTemplateRenderer):
         import base64
 
         return (
-            "data:image/png;base64,"
-            + base64.b64encode(shot_path.read_bytes()).decode()
+            "data:image/png;base64," + base64.b64encode(shot_path.read_bytes()).decode()
         )
 
     @staticmethod
@@ -112,7 +111,6 @@ class DeermapRenderer(BaseTemplateRenderer):
         Returns:
             (weeks_data, months, month_start_indices, week_to_month)
         """
-        import calendar
 
         max_count = max(stats_data.values()) if stats_data else 1
 
