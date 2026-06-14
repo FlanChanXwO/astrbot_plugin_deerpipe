@@ -133,7 +133,8 @@ class BaseTemplateRenderer(ABC):
                 html,
                 payload,
                 return_url=True,
-                options=options or {
+                options=options
+                or {
                     "type": "png",
                     "full_page": True,
                     "omit_background": True,

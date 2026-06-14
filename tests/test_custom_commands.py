@@ -13,7 +13,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from application.services.custom_command_manager import (
     CustomCommand,
     CustomCommandGroup,
-    CustomCommandManager,
 )
 
 

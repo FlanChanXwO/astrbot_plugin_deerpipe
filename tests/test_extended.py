@@ -10,9 +10,7 @@ import datetime as dt
 import json
 import sqlite3
 import tempfile
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import pytest
 
@@ -20,6 +18,7 @@ import pytest
 # =============================================================================
 # Database Logic Tests (using SQLite in-memory)
 # =============================================================================
+
 
 class TestDatabaseLogic:
     """测试数据库逻辑（使用内存 SQLite）."""
@@ -167,6 +166,7 @@ class TestDatabaseLogic:
 # Export/Import Data Tests
 # =============================================================================
 
+
 class TestExportImportData:
     """测试导出导入数据格式."""
 
@@ -237,7 +237,9 @@ class TestExportImportData:
 
         # 验证记录格式
         record = valid_data["deer_records"][0]
-        assert all(key in record for key in ["user_id", "year", "month", "day", "count"])
+        assert all(
+            key in record for key in ["user_id", "year", "month", "day", "count"]
+        )
 
     def test_import_invalid_data(self):
         """测试无效导入数据."""
@@ -262,6 +264,7 @@ class TestExportImportData:
 # =============================================================================
 # Statistics Calculation Tests
 # =============================================================================
+
 
 class TestStatisticsCalculation:
     """测试统计计算."""
@@ -315,6 +318,7 @@ class TestStatisticsCalculation:
 # Date Boundary Tests
 # =============================================================================
 
+
 class TestDateBoundaries:
     """测试日期边界情况."""
 
@@ -366,6 +370,7 @@ class TestDateBoundaries:
 # Batch Operations Tests
 # =============================================================================
 
+
 class TestBatchOperations:
     """测试批量操作."""
 
@@ -413,6 +418,7 @@ class TestBatchOperations:
 # String Formatting Tests
 # =============================================================================
 
+
 class TestStringFormatting:
     """测试字符串格式化."""
 
@@ -451,6 +457,7 @@ class TestStringFormatting:
 # =============================================================================
 # Configuration Validation Tests
 # =============================================================================
+
 
 class TestConfigurationValidation:
     """测试配置验证."""
@@ -499,6 +506,7 @@ class TestConfigurationValidation:
 # File Operations Tests
 # =============================================================================
 
+
 class TestFileOperations:
     """测试文件操作."""
 
@@ -536,6 +544,7 @@ class TestFileOperations:
 # Permission Logic Tests
 # =============================================================================
 
+
 class TestPermissionLogic:
     """测试权限逻辑."""
 
@@ -551,6 +560,7 @@ class TestPermissionLogic:
 
     def test_admin_check_logic(self):
         """测试管理员检查逻辑."""
+
         # 模拟管理员检查
         def is_admin(user_id: str, admin_list: list[str]) -> bool:
             return user_id in admin_list

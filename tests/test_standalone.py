@@ -5,13 +5,9 @@ These tests do not depend on AstrBot and can be run independently.
 
 from __future__ import annotations
 
-import asyncio
 import calendar
 import datetime as dt
-import re
-import tempfile
-from dataclasses import dataclass, field
-from pathlib import Path
+from dataclasses import dataclass
 from typing import Any
 
 import pytest
@@ -20,6 +16,7 @@ import pytest
 # =============================================================================
 # Core Logic Functions (copied from src for independent testing)
 # =============================================================================
+
 
 def normalize_user_id(user_id: Any) -> str:
     """将用户 ID 归一化为字符串."""
@@ -108,6 +105,7 @@ def get_days_in_month(year: int, month: int) -> int:
 # =============================================================================
 # Test Classes
 # =============================================================================
+
 
 class TestNormalizeUserId:
     """测试 normalize_user_id 函数."""
@@ -230,6 +228,7 @@ class TestExtractMentionUserIds:
 
     def test_extract_single_at(self):
         """测试提取单个 @."""
+
         @dataclass
         class MockAt:
             qq: str
@@ -240,6 +239,7 @@ class TestExtractMentionUserIds:
 
     def test_extract_multiple_ats(self):
         """测试提取多个 @."""
+
         @dataclass
         class MockAt:
             qq: str
@@ -255,6 +255,7 @@ class TestExtractMentionUserIds:
 
     def test_extract_with_all(self):
         """测试 @全体成员."""
+
         @dataclass
         class MockAt:
             qq: str
@@ -319,7 +320,7 @@ class TestIsLeapYear:
         """测试世纪年."""
         assert is_leap_year(1900) is False  # 能被100但不能被400整除
         assert is_leap_year(2100) is False
-        assert is_leap_year(2000) is True   # 能被400整除
+        assert is_leap_year(2000) is True  # 能被400整除
         assert is_leap_year(2400) is True
 
 
@@ -354,6 +355,7 @@ class TestGetDaysInMonth:
 # =============================================================================
 # Business Logic Tests
 # =============================================================================
+
 
 @dataclass
 class DeerRecord:
@@ -435,6 +437,7 @@ class TestUserConfigLogic:
 # Configuration Tests
 # =============================================================================
 
+
 class TestPluginConfigStructure:
     """测试插件配置结构."""
 
@@ -498,6 +501,7 @@ class TestPluginConfigStructure:
 # =============================================================================
 # Calendar Logic Tests
 # =============================================================================
+
 
 class TestCalendarLogic:
     """测试日历逻辑."""

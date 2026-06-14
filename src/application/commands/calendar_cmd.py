@@ -37,7 +37,9 @@ class CalendarCommandHandler:
         self.logger = logger
 
     @staticmethod
-    def _schedule_temp_cleanup(html_render, file_path: str, delay_seconds: int = 60) -> None:
+    def _schedule_temp_cleanup(
+        html_render, file_path: str, delay_seconds: int = 60
+    ) -> None:
         schedule = getattr(html_render, "schedule_temp_cleanup", None)
         if callable(schedule):
             schedule(file_path, delay_seconds)

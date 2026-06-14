@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import datetime as dt
 import sys
 import tempfile
@@ -222,10 +221,18 @@ class TestCalendarData:
             today = dt.date.today()
 
             # 添加多条记录
-            await db_manager.record_attendance(db, "user123", today.year, today.month, 1)
-            await db_manager.record_attendance(db, "user123", today.year, today.month, 5)
-            await db_manager.record_attendance(db, "user123", today.year, today.month, 5)  # 同一天两次
-            await db_manager.record_attendance(db, "user123", today.year, today.month, 10)
+            await db_manager.record_attendance(
+                db, "user123", today.year, today.month, 1
+            )
+            await db_manager.record_attendance(
+                db, "user123", today.year, today.month, 5
+            )
+            await db_manager.record_attendance(
+                db, "user123", today.year, today.month, 5
+            )  # 同一天两次
+            await db_manager.record_attendance(
+                db, "user123", today.year, today.month, 10
+            )
 
             data = await db_manager.get_calendar_data(
                 db, "user123", today.year, today.month
