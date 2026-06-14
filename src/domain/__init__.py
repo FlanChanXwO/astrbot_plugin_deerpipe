@@ -52,13 +52,13 @@ from .exceptions import (
     PermissionError,
     RateLimitError,
     RenderError,
+    RendererDisabledError,
     TemplateKeyError,
     ValidationError,
 )
 from .services import (
     CalendarDataBuilder,
     DeermapDataBuilder,
-    LeaderboardDataBuilder,
 )
 
 __all__ = [
@@ -109,10 +109,10 @@ __all__ = [
     "PermissionError",
     "RateLimitError",
     "RenderError",
+    "RendererDisabledError",
     "TemplateKeyError",
     "ValidationError",
     # Domain Services
     "CalendarDataBuilder",
     "DeermapDataBuilder",
-    "LeaderboardDataBuilder",
 ]

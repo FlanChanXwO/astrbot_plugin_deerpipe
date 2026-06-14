@@ -57,11 +57,6 @@ class RenderingConfig(BaseModel):
     """渲染引擎配置"""
 
     render_timeout: int = Field(default=30, description="渲染超时时间(秒)")
-    jpeg_quality: int = Field(default=95, description="JPEG 图片质量")
-    use_t2i: bool = Field(
-        default=False,
-        description="使用 AstrBot 内置 t2i 服务渲染图片，无需安装 Playwright",
-    )
 
     @classmethod
     def from_dict(cls, data: dict[str, Any] | None) -> RenderingConfig:
@@ -107,10 +102,6 @@ class DeerPipePluginConfig(BaseModel):
         return self.rendering.render_timeout
 
     @property
-    def jpeg_quality(self) -> int:
-        return self.rendering.jpeg_quality
-
-    @property
     def daily_retro_limit(self) -> int:
         return self.limits.daily_retro_limit
 
@@ -137,10 +128,6 @@ class DeerPipePluginConfig(BaseModel):
     @property
     def custom_prompt(self) -> str:
         return self.ai_behavior.custom_prompt
-
-    @property
-    def use_t2i(self) -> bool:
-        return self.rendering.use_t2i
 
 
 # ---------------------------------------------------------------------------

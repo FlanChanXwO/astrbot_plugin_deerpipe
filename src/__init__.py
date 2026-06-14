@@ -58,6 +58,7 @@ from .domain import (
     PermissionError,
     RateLimitError,
     RenderError,
+    RendererDisabledError,
     TemplateKeyError,
     UserConfig,
     ValidationError,
@@ -105,9 +106,6 @@ from .application import (
     DeerPipeService,
     DeermapCommandHandler,
     DeermapPresenter,
-    LeaderboardCommandHandler,
-    LeaderboardPresenter,
-    LeaderboardType,
     MessageTemplates,
 )
 
@@ -159,6 +157,7 @@ __all__ = [
     "PermissionError",
     "RateLimitError",
     "RenderError",
+    "RendererDisabledError",
     "TemplateKeyError",
     "ValidationError",
     # Application
@@ -173,9 +172,6 @@ __all__ = [
     "DeerPipeService",
     "DeermapCommandHandler",
     "DeermapPresenter",
-    "LeaderboardCommandHandler",
-    "LeaderboardPresenter",
-    "LeaderboardType",
     "MessageTemplates",
     # Infrastructure - Config
     "AIBehaviorConfig",

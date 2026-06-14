@@ -5,10 +5,8 @@
 
 from .calendar_data_builder import CalendarDataBuilder
 from .deermap_data_builder import DeermapDataBuilder
-from .leaderboard_data_builder import LeaderboardDataBuilder
 
 __all__ = [
     "CalendarDataBuilder",
     "DeermapDataBuilder",
-    "LeaderboardDataBuilder",
 ]
