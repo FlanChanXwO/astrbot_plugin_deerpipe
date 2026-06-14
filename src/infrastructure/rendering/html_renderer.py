@@ -18,6 +18,7 @@ from pathlib import Path
 
 from ..utils.http_utils import _get_aiohttp_session
 from ..utils.logger import get_logger
+from ...domain.exceptions import RenderError, RendererDisabledError
 
 logger = get_logger()
 
@@ -149,11 +150,14 @@ class DeerPipeHTMLRenderer:
 
         Args:
             render_timeout: 渲染超时时间（秒），默认 30 秒
-            jpeg_quality: JPEG 图片质量 (1-100)，暂未使用，保留以兼容配置
+            jpeg_quality: [DEPRECATED] JPEG 图片质量，t2i 渲染下无效，
+                仅保留以兼容旧调用方，将在后续版本移除。
             data_dir: 插件数据目录，用于保存状态
-            use_t2i: 保留参数以兼容配置，始终使用 t2i 渲染
+            use_t2i: [DEPRECATED] 历史渲染引擎开关，现始终使用 t2i，
+                仅保留以兼容旧调用方，将在后续版本移除。
         """
         self.render_timeout = render_timeout
+        # TODO: 待确认外部调用方均已迁移后，移除 jpeg_quality 字段
         self.jpeg_quality = jpeg_quality
 
         self._data_dir = data_dir or (Path.cwd() / "data")
@@ -175,7 +179,10 @@ class DeerPipeHTMLRenderer:
 
     @property
     def use_t2i(self) -> bool:
-        """兼容旧配置读取，始终返回 True."""
+        """[DEPRECATED] 历史渲染引擎开关，现始终返回 True.
+
+        仅保留以兼容旧调用方，将在后续版本移除。
+        """
         return True
 
     def reset_t2i_state(self) -> None:
@@ -257,10 +264,11 @@ class DeerPipeHTMLRenderer:
             图片 URL 或文件路径
 
         Raises:
-            RuntimeError: t2i 被禁用或渲染失败
+            RendererDisabledError: t2i 因连续失败被自动禁用
+            RenderError: t2i 渲染超时或失败
         """
         if self.t2i_disabled:
-            raise RuntimeError(
+            raise RendererDisabledError(
                 "t2i 渲染已被禁用（连续失败达到阈值）。"
                 "请检查 t2i 服务是否正常，然后使用 /重置渲染器 命令恢复。"
             )
@@ -274,12 +282,14 @@ class DeerPipeHTMLRenderer:
             return result
         except asyncio.TimeoutError:
             self._state_manager.record_t2i_failure()
-            raise RuntimeError(
+            raise RenderError(
                 f"t2i 渲染超时（{self.render_timeout}秒），请检查 t2i 服务状态"
             )
-        except Exception as e:
-            if not isinstance(e, RuntimeError) or "已被禁用" not in str(e):
-                self._state_manager.record_t2i_failure()
+        except RendererDisabledError:
+            # 禁用状态属于已知状态，不计入新的失败次数
+            raise
+        except Exception:
+            self._state_manager.record_t2i_failure()
             raise
 
     async def _render_with_t2i(
@@ -323,7 +333,7 @@ class DeerPipeHTMLRenderer:
                 return temp_path
             return image_data
 
-        raise RuntimeError(f"t2i 返回了不支持的类型: {type(image_data)}")
+        raise RenderError(f"t2i 返回了不支持的类型: {type(image_data)}")
 
 
 # 单例实例
@@ -340,9 +350,9 @@ def get_html_renderer(
 
     Args:
         render_timeout: 渲染超时时间（秒）
-        jpeg_quality: JPEG 质量（保留参数以兼容配置）
+        jpeg_quality: [DEPRECATED] t2i 渲染下无效，仅保留以兼容旧调用方
         data_dir: 插件数据目录
-        use_t2i: 保留参数以兼容配置，始终使用 t2i
+        use_t2i: [DEPRECATED] 历史渲染引擎开关，现始终使用 t2i
 
     Returns:
         DeerPipeHTMLRenderer 实例

@@ -7,6 +7,8 @@
   - 移除 `playwright>=1.40.0` 依赖，插件安装更轻量
   - 移除 `use_t2i` 和 `jpeg_quality` 配置项（不再需要选择渲染引擎）
   - t2i 连续失败达到阈值后自动禁用，可通过 `/重置渲染器` 命令恢复
+  - 新增 `RendererDisabledError` 异常类型区分「禁用」与「渲染失败」，不再依赖错误消息文本判断
+  - `DeerPipeHTMLRenderer` 的 `jpeg_quality`、`use_t2i` 参数标记为 deprecated（保留以兼容旧调用方）
 - **移除排行榜功能**: 删除未启用的排行榜模板和相关代码
   - 移除 `templates/leaderboard/` 模板目录
   - 移除 `leaderboard_cmd`、`leaderboard_presenter`、`leaderboard_data_builder`、`leaderboard_renderer` 模块
