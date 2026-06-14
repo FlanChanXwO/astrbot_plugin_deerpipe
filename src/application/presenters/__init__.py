@@ -5,10 +5,8 @@
 
 from .calendar_presenter import CalendarPresenter
 from .deermap_presenter import DeermapPresenter
-from .leaderboard_presenter import LeaderboardPresenter
 
 __all__ = [
     "CalendarPresenter",
     "DeermapPresenter",
-    "LeaderboardPresenter",
 ]

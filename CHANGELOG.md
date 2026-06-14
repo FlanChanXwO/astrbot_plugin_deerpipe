@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.1.0] - 2026-06-14
+
+### Changed
+- **移除 Playwright 本地渲染依赖**: 不再支持 Playwright 作为渲染回退方案，统一使用 AstrBot 内置 t2i 服务渲染图片
+  - 移除 `playwright>=1.40.0` 依赖，插件安装更轻量
+  - 移除 `use_t2i` 和 `jpeg_quality` 配置项（不再需要选择渲染引擎）
+  - t2i 连续失败达到阈值后自动禁用，可通过 `/重置渲染器` 命令恢复
+- **移除排行榜功能**: 删除未启用的排行榜模板和相关代码
+  - 移除 `templates/leaderboard/` 模板目录
+  - 移除 `leaderboard_cmd`、`leaderboard_presenter`、`leaderboard_data_builder`、`leaderboard_renderer` 模块
+  - 移除数据库中 `get_group_daily_leaderboard` 和 `get_group_monthly_leaderboard` 方法
+
 ## [2.0.1] - 2026-05-18
 
 ### Fixed

@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 from ..utils.logger import get_logger
@@ -33,7 +32,7 @@ class TemplateRenderer:
         """渲染HTML模板为图片.
 
         纯技术实现：
-        1. 调用传入的渲染函数（t2i 或 playwright）
+        1. 调用传入的渲染函数（t2i）
         2. 处理渲染结果
 
         Args:
@@ -54,7 +53,8 @@ class TemplateRenderer:
                 html,
                 payload,
                 return_url=True,
-                options=options or {
+                options=options
+                or {
                     "type": "png",
                     "full_page": True,
                     "scale": "device",

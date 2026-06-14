@@ -72,12 +72,6 @@
     "type": "object",
     "hint": "配置 HTML 图片渲染参数",
     "items": {
-      "use_t2i": {
-        "description": "使用 AstrBot 内置 t2i 渲染",
-        "type": "bool",
-        "default": false,
-        "hint": "开启后使用 AstrBot 内置的 t2i 服务渲染图片，无需安装 Playwright"
-      },
       "render_timeout": {
         "description": "渲染超时时间",
         "type": "int",
@@ -87,18 +81,7 @@
           "step": 5
         },
         "default": 30,
-        "hint": "单张图片渲染的最大等待时间（秒）。超时将自动回退到备用方案或返回错误"
-      },
-      "jpeg_quality": {
-        "description": "JPEG 图片质量",
-        "type": "int",
-        "slider": {
-          "min": 50,
-          "max": 100,
-          "step": 5
-        },
-        "default": 95,
-        "hint": "Playwright 渲染时 JPEG 图片的质量 (1-100)，数值越高质量越好但文件越大"
+        "hint": "单张图片渲染的最大等待时间（秒）。超时将返回错误"
       }
     }
   }

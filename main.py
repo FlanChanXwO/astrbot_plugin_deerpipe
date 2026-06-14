@@ -31,7 +31,6 @@ from .src import (
     DeerPipeHTMLRenderer,
     DeerPipeLLMTools,
     DeerPipeService,
-    LeaderboardCommandHandler,
     ResourceLoader,
     TemplateRenderer,
     close_aiohttp_session,
@@ -97,25 +96,16 @@ class DeerPipePlugin(Star):
         self.admin_handler = AdminCommandHandler(self.service)
         self.data_handler = DataCommandHandler(self.data_manager)
         self.base_dir = Path(__file__).parent
-        self.leaderboard_handler = LeaderboardCommandHandler(
-            self.service, self.db, self.base_dir
-        )
         self.deermap_handler = DeermapCommandHandler(self.db, self.base_dir)
 
         # 初始化 HTML 渲染器
         render_timeout = cfg.render_timeout
-        jpeg_quality = cfg.jpeg_quality
-        use_t2i = cfg.use_t2i
 
         self.html_render = DeerPipeHTMLRenderer(
             render_timeout=render_timeout,
-            jpeg_quality=jpeg_quality,
             data_dir=self.base_dir / "data",
-            use_t2i=use_t2i,
         )
-        logger.info(
-            f"HTML 渲染器已初始化: use_t2i={use_t2i}, render_timeout={render_timeout}s, jpeg_quality={jpeg_quality}"
-        )
+        logger.info(f"HTML 渲染器已初始化: render_timeout={render_timeout}s")
 
     def _config_to_dict(self, config: AstrBotConfig) -> dict:
         """将 AstrBotConfig 转换为普通 dict.
@@ -574,40 +564,8 @@ class DeerPipePlugin(Star):
             yield result
 
     # ==================================================================
-    # Leaderboard commands
+    # Deermap command
     # ==================================================================
-    # @filter.command(
-    #     "deer_rank", alias={"鹿排行榜", "鹿排名", "鹿榜🦌排行榜", "🦌排名", "🦌榜"}
-    # )
-    # async def leaderboard_cmd(
-    #     self, event: AstrMessageEvent
-    # ) -> AsyncGenerator[Any, None]:
-    #     """查看今日群打卡排行榜 (/leaderboard)."""
-    #     async for result in self.leaderboard_handler.handle_leaderboard(
-    #         event, self.html_render, LeaderboardType.DAILY
-    #     ):
-    #         yield result
-    #
-    # @filter.command("deer_yesterday_rank", alias={"昨日鹿榜", "昨日🦌榜"})
-    # async def yesterday_rank_cmd(
-    #     self, event: AstrMessageEvent
-    # ) -> AsyncGenerator[Any, None]:
-    #     """查看昨日群打卡排行榜 (/yesterday_rank)."""
-    #     async for result in self.leaderboard_handler.handle_leaderboard(
-    #         event, self.html_render, LeaderboardType.YESTERDAY
-    #     ):
-    #         yield result
-    #
-    # @filter.command("deer_monthly_rank", alias={"鹿月榜", "🦌月榜"})
-    # async def monthly_rank_cmd(
-    #     self, event: AstrMessageEvent
-    # ) -> AsyncGenerator[Any, None]:
-    #     """查看本月群打卡排行榜 (/monthly_rank)."""
-    #     async for result in self.leaderboard_handler.handle_leaderboard(
-    #         event, self.html_render, LeaderboardType.MONTHLY
-    #     ):
-    #         yield result
-
     @filter.command("deer_map", alias={"鹿力图", "鹿年历", "🦌力图"})
     async def deermap_cmd(
         self, event: AstrMessageEvent, year: int | None = None

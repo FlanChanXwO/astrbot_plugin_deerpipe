@@ -1,8 +1,8 @@
-"""HTML 渲染器 - 优先使用 t2i，失败时回退到 Playwright.
+"""HTML 渲染器 - 使用 AstrBot 内置 t2i 服务渲染图片.
 
 渲染策略：
-1. 优先使用 AstrBot 内置 t2i 服务（远程渲染，无需本地依赖）
-2. t2i 连续失败3次后自动禁用，切换到 Playwright 为主
+1. 使用 AstrBot 内置 t2i 服务渲染 HTML 为图片
+2. t2i 连续失败3次后自动禁用，可通过 /重置渲染器 命令恢复
 3. 支持配置渲染超时时间
 4. 状态持久化，AstrBot 重启后仍保留
 """
@@ -27,25 +27,6 @@ T2I_MAX_FAILURES = 3
 STATE_SAVE_INTERVAL = 5
 
 
-def check_playwright_installation() -> tuple[bool, str]:
-    """检测 Playwright 是否已安装.
-
-    Returns:
-        (是否安装, 提示信息)
-    """
-    try:
-        import playwright  # noqa: F401
-
-        return True, "Playwright 已安装"
-    except ImportError:
-        return False, (
-            "⚠️ 未检测到 Playwright，如 t2i 渲染失败将无法回退到本地渲染。\n"
-            "建议安装以确保渲染稳定性：\n"
-            "  pip install playwright\n"
-            "  playwright install chromium"
-        )
-
-
 class T2IStateManager:
     """t2i 状态管理器 - 持久化记录失败次数和禁用状态."""
 
@@ -58,7 +39,12 @@ class T2IStateManager:
         if data_dir is None:
             # 默认使用插件数据目录
             from astrbot.core.utils.astrbot_path import get_astrbot_data_path
-            data_dir = Path(get_astrbot_data_path()) / "plugin_data" / "astrbot_plugin_deerpipe"
+
+            data_dir = (
+                Path(get_astrbot_data_path())
+                / "plugin_data"
+                / "astrbot_plugin_deerpipe"
+            )
 
         self.data_dir = data_dir
         self.state_file = data_dir / "renderer_state.json"
@@ -72,9 +58,17 @@ class T2IStateManager:
             if self.state_file.exists():
                 self._state = json.loads(self.state_file.read_text(encoding="utf-8"))
             else:
-                self._state = {"t2i_failures": 0, "t2i_disabled": False, "last_failure_time": None}
+                self._state = {
+                    "t2i_failures": 0,
+                    "t2i_disabled": False,
+                    "last_failure_time": None,
+                }
         except Exception:
-            self._state = {"t2i_failures": 0, "t2i_disabled": False, "last_failure_time": None}
+            self._state = {
+                "t2i_failures": 0,
+                "t2i_disabled": False,
+                "last_failure_time": None,
+            }
 
     def _save_state(self) -> None:
         """保存状态到文件（带间隔限制）."""
@@ -85,8 +79,7 @@ class T2IStateManager:
         try:
             self.data_dir.mkdir(parents=True, exist_ok=True)
             self.state_file.write_text(
-                json.dumps(self._state, ensure_ascii=False, indent=2),
-                encoding="utf-8"
+                json.dumps(self._state, ensure_ascii=False, indent=2), encoding="utf-8"
             )
             self._last_save = now
         except Exception:
@@ -130,18 +123,19 @@ class T2IStateManager:
 
     def reset(self) -> None:
         """手动重置状态（用户通过命令或配置更改后调用）."""
-        self._state = {"t2i_failures": 0, "t2i_disabled": False, "last_failure_time": None}
+        self._state = {
+            "t2i_failures": 0,
+            "t2i_disabled": False,
+            "last_failure_time": None,
+        }
         self._save_state()
 
 
 class DeerPipeHTMLRenderer:
     """DeerPipe HTML 渲染器.
 
-    渲染策略：
-    1. 根据 use_t2i 配置决定优先使用 t2i 还是 Playwright
-    2. t2i 连续失败3次后自动禁用，切换到 Playwright
-    3. 支持通过 timeout 参数控制渲染超时
-    4. 状态持久化，AstrBot 重启后仍保留禁用状态
+    使用 AstrBot 内置 t2i 服务渲染 HTML 为图片。
+    t2i 连续失败3次后自动禁用，可通过 /重置渲染器 命令恢复。
     """
 
     def __init__(
@@ -149,19 +143,18 @@ class DeerPipeHTMLRenderer:
         render_timeout: int = 30,
         jpeg_quality: int = 95,
         data_dir: Path | None = None,
-        use_t2i: bool = False,
+        use_t2i: bool = True,
     ):
         """初始化 HTML 渲染器.
 
         Args:
             render_timeout: 渲染超时时间（秒），默认 30 秒
-            jpeg_quality: JPEG 图片质量 (1-100)，仅对 Playwright 生效
+            jpeg_quality: JPEG 图片质量 (1-100)，暂未使用，保留以兼容配置
             data_dir: 插件数据目录，用于保存状态
-            use_t2i: 是否优先使用 t2i 服务（默认 False，使用 Playwright）
+            use_t2i: 保留参数以兼容配置，始终使用 t2i 渲染
         """
         self.render_timeout = render_timeout
         self.jpeg_quality = jpeg_quality
-        self.use_t2i = use_t2i
 
         self._data_dir = data_dir or (Path.cwd() / "data")
         self._temp_dir = self._data_dir / "temp"
@@ -169,11 +162,6 @@ class DeerPipeHTMLRenderer:
 
         # t2i 状态管理器
         self._state_manager = T2IStateManager(data_dir)
-
-        # Playwright 浏览器实例（延迟初始化，仅在需要时创建）
-        self._browser = None
-        self._playwright = None
-        self._lock = asyncio.Lock()
 
     @property
     def t2i_disabled(self) -> bool:
@@ -184,6 +172,11 @@ class DeerPipeHTMLRenderer:
     def t2i_failures(self) -> int:
         """获取 t2i 当前连续失败次数."""
         return self._state_manager.t2i_failures
+
+    @property
+    def use_t2i(self) -> bool:
+        """兼容旧配置读取，始终返回 True."""
+        return True
 
     def reset_t2i_state(self) -> None:
         """手动重置 t2i 状态（用户修复 t2i 服务后调用）."""
@@ -229,29 +222,8 @@ class DeerPipeHTMLRenderer:
             pass
 
     async def close(self):
-        """关闭浏览器资源."""
-        if self._browser:
-            await self._browser.close()
-            self._browser = None
-        if self._playwright:
-            await self._playwright.stop()
-            self._playwright = None
-
-    async def _get_browser(self):
-        """获取或创建 Playwright 浏览器实例."""
-        if self._browser is None:
-            try:
-                from playwright.async_api import async_playwright
-
-                self._playwright = await async_playwright().start()
-                self._browser = await self._playwright.chromium.launch()
-            except ImportError as e:
-                raise RuntimeError(
-                    "Playwright 未安装，无法回退到本地渲染。请运行：\n"
-                    "  pip install playwright\n"
-                    "  playwright install chromium"
-                ) from e
-        return self._browser
+        """清理资源（t2i 无需显式关闭）."""
+        pass
 
     async def __call__(
         self,
@@ -272,9 +244,8 @@ class DeerPipeHTMLRenderer:
     ) -> str:
         """渲染 HTML 为图片.
 
-        根据 use_t2i 配置决定渲染策略：
-        - use_t2i=True: 优先使用 t2i，失败时回退到 Playwright
-        - use_t2i=False: 仅使用 Playwright
+        使用 AstrBot 内置 t2i 服务渲染。t2i 连续失败达到阈值后自动禁用，
+        可通过 /重置渲染器 命令恢复。
 
         Args:
             html: HTML 模板字符串
@@ -284,34 +255,32 @@ class DeerPipeHTMLRenderer:
 
         Returns:
             图片 URL 或文件路径
-        """
-        # 根据配置决定渲染策略
-        if self.use_t2i and not self.t2i_disabled:
-            # 第1策略：尝试 t2i（带超时）
-            try:
-                result = await asyncio.wait_for(
-                    self._render_with_t2i(html, payload, return_url, options),
-                    timeout=self.render_timeout,
-                )
-                # 成功，重置失败计数
-                self._state_manager.record_t2i_success()
-                return result
-            except asyncio.TimeoutError:
-                logger.warning(f"t2i 渲染超时（{self.render_timeout}秒），回退到 Playwright")
-                self._state_manager.record_t2i_failure()
-            except Exception as e:
-                # 仅记录异常类型和简短描述，避免 base64 污染日志
-                logger.warning(
-                    f"t2i 渲染失败 ({type(e).__name__})，回退到 Playwright"
-                )
-                self._state_manager.record_t2i_failure()
-        elif not self.use_t2i:
-            logger.debug("use_t2i=False，使用 Playwright 渲染")
-        else:
-            logger.warning("t2i 已被禁用，回退到 Playwright")
 
-        # 第2策略：回退到 Playwright
-        return await self._render_with_playwright(html, payload, options)
+        Raises:
+            RuntimeError: t2i 被禁用或渲染失败
+        """
+        if self.t2i_disabled:
+            raise RuntimeError(
+                "t2i 渲染已被禁用（连续失败达到阈值）。"
+                "请检查 t2i 服务是否正常，然后使用 /重置渲染器 命令恢复。"
+            )
+
+        try:
+            result = await asyncio.wait_for(
+                self._render_with_t2i(html, payload, return_url, options),
+                timeout=self.render_timeout,
+            )
+            self._state_manager.record_t2i_success()
+            return result
+        except asyncio.TimeoutError:
+            self._state_manager.record_t2i_failure()
+            raise RuntimeError(
+                f"t2i 渲染超时（{self.render_timeout}秒），请检查 t2i 服务状态"
+            )
+        except Exception as e:
+            if not isinstance(e, RuntimeError) or "已被禁用" not in str(e):
+                self._state_manager.record_t2i_failure()
+            raise
 
     async def _render_with_t2i(
         self,
@@ -356,85 +325,6 @@ class DeerPipeHTMLRenderer:
 
         raise RuntimeError(f"t2i 返回了不支持的类型: {type(image_data)}")
 
-    async def _render_with_playwright(
-        self,
-        html: str,
-        payload: dict,
-        options: dict | None = None,
-    ) -> str:
-        """使用 Playwright 本地渲染."""
-        try:
-            from jinja2 import Template
-        except ImportError:
-            raise RuntimeError(
-                "Playwright 渲染需要 jinja2，请安装: pip install jinja2"
-            )
-
-        # 使用 Jinja2 渲染模板
-        template = Template(html)
-        html_content = template.render(**payload)
-
-        async with self._lock:
-            browser = await self._get_browser()
-            page = await browser.new_page()
-
-            try:
-                await page.set_content(html_content, wait_until="networkidle")
-
-                # 等待字体加载完成（通过检查 data-fonts-loaded 属性）
-                try:
-                    await page.wait_for_selector(
-                        "html[data-fonts-loaded='true']",
-                        timeout=5000,
-                        state="attached"
-                    )
-                except Exception:
-                    pass
-
-                # 额外等待确保渲染稳定
-                await page.wait_for_timeout(300)
-
-                # 获取主容器尺寸（优先使用容器元素，避免 body 宽度不准确）
-                dimensions = await page.evaluate("""() => {
-                    const container = document.querySelector('.container, .leaderboard-container, .heatmap-container, .batch-container');
-                    if (container) {
-                        const rect = container.getBoundingClientRect();
-                        return { width: Math.ceil(rect.width), height: Math.ceil(rect.height) };
-                    }
-                    // 回退到 body 尺寸
-                    return {
-                        width: document.body.scrollWidth,
-                        height: document.body.scrollHeight
-                    };
-                }""")
-                page_width = dimensions['width']
-                page_height = dimensions['height']
-                await page.set_viewport_size(
-                    {"width": page_width, "height": page_height}
-                )
-
-                # 截图选项
-                screenshot_type = (options or {}).get("type", "png")
-                full_page = (options or {}).get("full_page", True)
-
-                if screenshot_type == "jpeg":
-                    screenshot_bytes = await page.screenshot(
-                        type="jpeg",
-                        quality=self.jpeg_quality,
-                        full_page=full_page,
-                    )
-                else:
-                    screenshot_bytes = await page.screenshot(
-                        type="png",
-                        full_page=full_page,
-                    )
-
-                suffix = ".jpeg" if screenshot_type == "jpeg" else ".png"
-                return self._write_temp_file(screenshot_bytes, suffix)
-
-            finally:
-                await page.close()
-
 
 # 单例实例
 _renderer_instance: DeerPipeHTMLRenderer | None = None
@@ -444,15 +334,15 @@ def get_html_renderer(
     render_timeout: int = 30,
     jpeg_quality: int = 95,
     data_dir: Path | None = None,
-    use_t2i: bool = False,
+    use_t2i: bool = True,
 ) -> DeerPipeHTMLRenderer:
     """获取 HTML 渲染器单例.
 
     Args:
         render_timeout: 渲染超时时间（秒）
-        jpeg_quality: JPEG 质量
+        jpeg_quality: JPEG 质量（保留参数以兼容配置）
         data_dir: 插件数据目录
-        use_t2i: 是否优先使用 t2i 服务
+        use_t2i: 保留参数以兼容配置，始终使用 t2i
 
     Returns:
         DeerPipeHTMLRenderer 实例

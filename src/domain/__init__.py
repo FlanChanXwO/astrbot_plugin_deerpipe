@@ -58,7 +58,6 @@ from .exceptions import (
 from .services import (
     CalendarDataBuilder,
     DeermapDataBuilder,
-    LeaderboardDataBuilder,
 )
 
 __all__ = [
@@ -114,5 +113,4 @@ __all__ = [
     # Domain Services
     "CalendarDataBuilder",
     "DeermapDataBuilder",
-    "LeaderboardDataBuilder",
 ]
