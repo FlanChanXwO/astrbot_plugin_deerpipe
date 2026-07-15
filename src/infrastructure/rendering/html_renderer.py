@@ -29,7 +29,7 @@ class DeerPipeHTMLRenderer:
         self,
         render_timeout: int = 30,
         data_dir: Path | None = None,
-    ):
+    ) -> None:
         """初始化 HTML 渲染器.
 
         Args:
@@ -117,7 +117,8 @@ class DeerPipeHTMLRenderer:
             图片 URL 或文件路径
 
         Raises:
-            RenderError: t2i 渲染超时或失败
+            RenderError: t2i 渲染超时或返回了不支持的数据类型
+            Exception: 模板渲染、t2i 调用或图片下载的底层异常会原样传播
         """
         try:
             return await asyncio.wait_for(
