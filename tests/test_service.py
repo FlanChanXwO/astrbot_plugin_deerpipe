@@ -176,7 +176,7 @@ class TestHandleDeerPast:
         # 如果日期有效且未达到限制，应该成功
         if "成功补🦌" in result1:
             # 第二次补打卡（应该达到限制）
-            result2 = await service.handle_deer_past(event, yesterday.day - 1 or 1)
+            await service.handle_deer_past(event, yesterday.day - 1 or 1)
             # 结果取决于 daily_retro_limit 配置
 
     @pytest.mark.asyncio

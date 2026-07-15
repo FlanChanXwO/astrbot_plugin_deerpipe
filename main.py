@@ -39,7 +39,6 @@ from .src import (
     get_logger,
     init_config,
 )
-from .src.domain.datamodels import ToolResult
 from .src.shared.constants import (
     PLAIN_CALENDAR_TRIGGER_PATTERN,
     PLAIN_DEER_TRIGGER_PATTERN,
@@ -636,36 +635,6 @@ class DeerPipePlugin(Star):
         result = await self.admin_handler.handle_set_deer_off(event)
         if result:
             yield event.plain_result(result)
-
-    @filter.permission_type(filter.PermissionType.ADMIN)
-    @filter.command("重置渲染器", alias={"reset_renderer", "重置t2i"})
-    async def reset_renderer_cmd(
-        self, event: AstrMessageEvent
-    ) -> AsyncGenerator[Any, None]:
-        """重置 t2i 渲染器状态，在修复 t2i 服务后使用 (/重置渲染器)."""
-        try:
-            # 检查当前状态
-            was_disabled = self.html_render.t2i_disabled
-            failure_count = self.html_render.t2i_failures
-
-            # 重置状态
-            self.html_render.reset_t2i_state()
-
-            if was_disabled:
-                yield event.plain_result(
-                    "✅ 已重置 t2i 渲染器状态\n"
-                    f"📊 之前状态: 已禁用（连续失败 {failure_count} 次）\n"
-                    "🔄 现在将重新尝试使用 t2i 渲染"
-                )
-            else:
-                yield event.plain_result(
-                    "✅ 已重置 t2i 渲染器状态\n"
-                    f"📊 之前失败次数: {failure_count}\n"
-                    "✨ 渲染器状态正常"
-                )
-        except Exception as e:
-            logger.error(f"重置渲染器失败: {e}")
-            yield event.plain_result(f"❌ 重置渲染器失败: {e}")
 
     @filter.command("retro_deer", alias={"补鹿", "补🦌", "补撸", "补撸🦌"})
     async def retro_deer_cmd(

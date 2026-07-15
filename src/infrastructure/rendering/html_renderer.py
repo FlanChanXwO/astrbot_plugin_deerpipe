@@ -2,192 +2,45 @@
 
 渲染策略：
 1. 使用 AstrBot 内置 t2i 服务渲染 HTML 为图片
-2. t2i 连续失败3次后自动禁用，可通过 /重置渲染器 命令恢复
-3. 支持配置渲染超时时间
-4. 状态持久化，AstrBot 重启后仍保留
+2. 支持配置单次渲染超时时间
+3. 每次请求独立调用 t2i，失败不会阻断后续渲染
 """
 
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import time
 import uuid
 from pathlib import Path
 
 from ..utils.http_utils import _get_aiohttp_session
-from ..utils.logger import get_logger
-from ...domain.exceptions import RenderError, RendererDisabledError
-
-logger = get_logger()
-
-# t2i 连续失败阈值，达到此值后禁用 t2i
-T2I_MAX_FAILURES = 3
-# 状态文件保存间隔（秒），避免频繁写入
-STATE_SAVE_INTERVAL = 5
-
-
-class T2IStateManager:
-    """t2i 状态管理器 - 持久化记录失败次数和禁用状态."""
-
-    def __init__(self, data_dir: Path | None = None):
-        """初始化状态管理器.
-
-        Args:
-            data_dir: 插件数据目录，用于保存状态文件
-        """
-        if data_dir is None:
-            # 默认使用插件数据目录
-            from astrbot.core.utils.astrbot_path import get_astrbot_data_path
-
-            data_dir = (
-                Path(get_astrbot_data_path())
-                / "plugin_data"
-                / "astrbot_plugin_deerpipe"
-            )
-
-        self.data_dir = data_dir
-        self.state_file = data_dir / "renderer_state.json"
-        self._state: dict = {}
-        self._last_save = 0
-        self._load_state()
-
-    def _load_state(self) -> None:
-        """从文件加载状态."""
-        try:
-            if self.state_file.exists():
-                self._state = json.loads(self.state_file.read_text(encoding="utf-8"))
-            else:
-                self._state = {
-                    "t2i_failures": 0,
-                    "t2i_disabled": False,
-                    "last_failure_time": None,
-                }
-        except Exception:
-            self._state = {
-                "t2i_failures": 0,
-                "t2i_disabled": False,
-                "last_failure_time": None,
-            }
-
-    def _save_state(self) -> None:
-        """保存状态到文件（带间隔限制）."""
-        now = time.time()
-        if now - self._last_save < STATE_SAVE_INTERVAL:
-            return
-
-        try:
-            self.data_dir.mkdir(parents=True, exist_ok=True)
-            self.state_file.write_text(
-                json.dumps(self._state, ensure_ascii=False, indent=2), encoding="utf-8"
-            )
-            self._last_save = now
-        except Exception:
-            pass
-
-    @property
-    def t2i_disabled(self) -> bool:
-        """检查 t2i 是否已被禁用."""
-        return self._state.get("t2i_disabled", False)
-
-    @property
-    def t2i_failures(self) -> int:
-        """获取当前连续失败次数."""
-        return self._state.get("t2i_failures", 0)
-
-    def record_t2i_failure(self) -> bool:
-        """记录一次 t2i 失败.
-
-        Returns:
-            是否达到阈值被禁用
-        """
-        self._state["t2i_failures"] = self.t2i_failures + 1
-        self._state["last_failure_time"] = time.time()
-
-        if self._state["t2i_failures"] >= T2I_MAX_FAILURES:
-            self._state["t2i_disabled"] = True
-            logger.warning(f"t2i 已连续失败 {T2I_MAX_FAILURES} 次，已自动禁用")
-            self._save_state()
-            return True
-
-        self._save_state()
-        return False
-
-    def record_t2i_success(self) -> None:
-        """记录一次 t2i 成功，重置失败计数."""
-        if self._state["t2i_failures"] > 0 or self._state["t2i_disabled"]:
-            self._state["t2i_failures"] = 0
-            self._state["t2i_disabled"] = False
-            self._state["last_failure_time"] = None
-            self._save_state()
-
-    def reset(self) -> None:
-        """手动重置状态（用户通过命令或配置更改后调用）."""
-        self._state = {
-            "t2i_failures": 0,
-            "t2i_disabled": False,
-            "last_failure_time": None,
-        }
-        self._save_state()
+from ...domain.exceptions import RenderError
 
 
 class DeerPipeHTMLRenderer:
     """DeerPipe HTML 渲染器.
 
     使用 AstrBot 内置 t2i 服务渲染 HTML 为图片。
-    t2i 连续失败3次后自动禁用，可通过 /重置渲染器 命令恢复。
+    单次失败不会产生跨请求状态，后续请求仍会重新调用 t2i。
     """
 
     def __init__(
         self,
         render_timeout: int = 30,
-        jpeg_quality: int = 95,
         data_dir: Path | None = None,
-        use_t2i: bool = True,
-    ):
+    ) -> None:
         """初始化 HTML 渲染器.
 
         Args:
             render_timeout: 渲染超时时间（秒），默认 30 秒
-            jpeg_quality: [DEPRECATED] JPEG 图片质量，t2i 渲染下无效，
-                仅保留以兼容旧调用方，将在后续版本移除。
-            data_dir: 插件数据目录，用于保存状态
-            use_t2i: [DEPRECATED] 历史渲染引擎开关，现始终使用 t2i，
-                仅保留以兼容旧调用方，将在后续版本移除。
+            data_dir: 插件数据目录，用于保存临时图片
         """
         self.render_timeout = render_timeout
-        # TODO: 待确认外部调用方均已迁移后，移除 jpeg_quality 字段
-        self.jpeg_quality = jpeg_quality
 
         self._data_dir = data_dir or (Path.cwd() / "data")
         self._temp_dir = self._data_dir / "temp"
         self._temp_dir.mkdir(parents=True, exist_ok=True)
-
-        # t2i 状态管理器
-        self._state_manager = T2IStateManager(data_dir)
-
-    @property
-    def t2i_disabled(self) -> bool:
-        """检查 t2i 是否已被禁用."""
-        return self._state_manager.t2i_disabled
-
-    @property
-    def t2i_failures(self) -> int:
-        """获取 t2i 当前连续失败次数."""
-        return self._state_manager.t2i_failures
-
-    @property
-    def use_t2i(self) -> bool:
-        """[DEPRECATED] 历史渲染引擎开关，现始终返回 True.
-
-        仅保留以兼容旧调用方，将在后续版本移除。
-        """
-        return True
-
-    def reset_t2i_state(self) -> None:
-        """手动重置 t2i 状态（用户修复 t2i 服务后调用）."""
-        self._state_manager.reset()
 
     def _get_temp_suffix(self, options: dict | None) -> str:
         image_type = (options or {}).get("type", "png")
@@ -251,8 +104,8 @@ class DeerPipeHTMLRenderer:
     ) -> str:
         """渲染 HTML 为图片.
 
-        使用 AstrBot 内置 t2i 服务渲染。t2i 连续失败达到阈值后自动禁用，
-        可通过 /重置渲染器 命令恢复。
+        使用 AstrBot 内置 t2i 服务渲染。每次调用互相独立，失败不会阻断
+        后续请求。
 
         Args:
             html: HTML 模板字符串
@@ -264,33 +117,18 @@ class DeerPipeHTMLRenderer:
             图片 URL 或文件路径
 
         Raises:
-            RendererDisabledError: t2i 因连续失败被自动禁用
-            RenderError: t2i 渲染超时或失败
+            RenderError: t2i 渲染超时或返回了不支持的数据类型
+            Exception: 模板渲染、t2i 调用或图片下载的底层异常会原样传播
         """
-        if self.t2i_disabled:
-            raise RendererDisabledError(
-                "t2i 渲染已被禁用（连续失败达到阈值）。"
-                "请检查 t2i 服务是否正常，然后使用 /重置渲染器 命令恢复。"
-            )
-
         try:
-            result = await asyncio.wait_for(
+            return await asyncio.wait_for(
                 self._render_with_t2i(html, payload, return_url, options),
                 timeout=self.render_timeout,
             )
-            self._state_manager.record_t2i_success()
-            return result
         except asyncio.TimeoutError:
-            self._state_manager.record_t2i_failure()
             raise RenderError(
                 f"t2i 渲染超时（{self.render_timeout}秒），请检查 t2i 服务状态"
             )
-        except RendererDisabledError:
-            # 禁用状态属于已知状态，不计入新的失败次数
-            raise
-        except Exception:
-            self._state_manager.record_t2i_failure()
-            raise
 
     async def _render_with_t2i(
         self,
@@ -342,17 +180,13 @@ _renderer_instance: DeerPipeHTMLRenderer | None = None
 
 def get_html_renderer(
     render_timeout: int = 30,
-    jpeg_quality: int = 95,
     data_dir: Path | None = None,
-    use_t2i: bool = True,
 ) -> DeerPipeHTMLRenderer:
     """获取 HTML 渲染器单例.
 
     Args:
         render_timeout: 渲染超时时间（秒）
-        jpeg_quality: [DEPRECATED] t2i 渲染下无效，仅保留以兼容旧调用方
         data_dir: 插件数据目录
-        use_t2i: [DEPRECATED] 历史渲染引擎开关，现始终使用 t2i
 
     Returns:
         DeerPipeHTMLRenderer 实例
@@ -360,7 +194,8 @@ def get_html_renderer(
     global _renderer_instance
     if _renderer_instance is None:
         _renderer_instance = DeerPipeHTMLRenderer(
-            render_timeout, jpeg_quality, data_dir, use_t2i
+            render_timeout=render_timeout,
+            data_dir=data_dir,
         )
     return _renderer_instance
 

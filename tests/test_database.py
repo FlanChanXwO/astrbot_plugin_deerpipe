@@ -272,7 +272,6 @@ class TestRetroCount:
         """测试获取空的今日补打卡次数."""
         db = await db_manager.get_connection()
         try:
-            today = dt.date.today()
             count = await db_manager.get_today_retro_count(db, "user123")
             assert count == 0
         finally:

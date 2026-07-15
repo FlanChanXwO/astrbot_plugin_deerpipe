@@ -124,7 +124,6 @@ class TestCustomCommandManagerParsing:
 
     def test_parse_empty_config(self):
         """测试空配置."""
-        config = {"custom_groups": []}
         # 由于需要 context 和 service，我们只测试解析逻辑
         # 实际测试中需要 mock 这些依赖
 
@@ -186,14 +185,11 @@ class TestCustomCommandManager:
     def test_manager_creation(self):
         """测试管理器创建."""
         # 由于需要 context 和 service，这里只测试基础结构
-        config = {"custom_groups": []}
         # manager = CustomCommandManager(mock_context, config, mock_service)
 
     def test_get_menu_items_empty(self):
         """测试空配置的菜单项."""
         # 当没有自定义命令组时，菜单项应该为空
-        config = {"custom_groups": []}
-
         # 创建 Manager 实例并测试
         # manager = CustomCommandManager(mock_context, config, mock_service)
         # items = manager.get_menu_items()
@@ -232,20 +228,6 @@ class TestCommandExecutionLogic:
     @pytest.mark.asyncio
     async def test_execute_command_default(self):
         """测试默认命令执行."""
-        from tests.mocks import MockAstrMessageEvent
-
-        # 创建模拟对象
-        group = CustomCommandGroup(
-            group_name="测试组",
-            description="测试",
-            commands=[],
-        )
-        cmd = CustomCommand(
-            command_name="test",
-            trigger_type="command",
-        )
-        event = MockAstrMessageEvent(sender_id="123", sender_name="TestUser")
-
         # 默认执行返回提示信息
         # 实际测试需要在 Manager 实例上调用
         # result = await manager._execute_command(group, cmd, event)
@@ -255,20 +237,6 @@ class TestCommandExecutionLogic:
     @pytest.mark.asyncio
     async def test_execute_regex_command_default(self):
         """测试默认正则命令执行."""
-        from tests.mocks import MockAstrMessageEvent
-
-        group = CustomCommandGroup(
-            group_name="测试组",
-            description="测试",
-            commands=[],
-        )
-        cmd = CustomCommand(
-            command_name="regex_test",
-            pattern=r"^test\d+$",
-            trigger_type="regex",
-        )
-        event = MockAstrMessageEvent(sender_id="123", sender_name="TestUser")
-
         # 默认执行返回提示信息
         # result = await manager._execute_command(group, cmd, event)
         # assert "regex_test' 已触发" in result

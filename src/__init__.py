@@ -58,7 +58,6 @@ from .domain import (
     PermissionError,
     RateLimitError,
     RenderError,
-    RendererDisabledError,
     TemplateKeyError,
     UserConfig,
     ValidationError,
@@ -157,7 +156,6 @@ __all__ = [
     "PermissionError",
     "RateLimitError",
     "RenderError",
-    "RendererDisabledError",
     "TemplateKeyError",
     "ValidationError",
     # Application
