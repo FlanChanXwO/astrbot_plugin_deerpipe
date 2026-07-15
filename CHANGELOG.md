@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.1.1] - 2026-07-15
+
+### Fixed
+- **移除 t2i 渲染器禁用机制**: 单次网络或服务异常不再累计失败次数，也不会阻断后续渲染；每次请求都会重新调用 AstrBot 内置 t2i
+  - 停止读取和写入 `renderer_state.json`，已有遗留文件保持不变且不再生效
+  - 删除 `/重置渲染器`、`/reset_renderer`、`/重置t2i` 命令
+  - 删除 `RendererDisabledError` 及禁用状态查询、计数和重置接口
+
+### Changed
+- 删除 `DeerPipeHTMLRenderer` 与 `get_html_renderer()` 中废弃的 `use_t2i`、`jpeg_quality` 参数和属性
+- 增加渲染恢复路径及无 Playwright 运行依赖的回归测试
+
 ## [2.1.0] - 2026-06-14
 
 ### Changed

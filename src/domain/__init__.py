@@ -52,7 +52,6 @@ from .exceptions import (
     PermissionError,
     RateLimitError,
     RenderError,
-    RendererDisabledError,
     TemplateKeyError,
     ValidationError,
 )
@@ -109,7 +108,6 @@ __all__ = [
     "PermissionError",
     "RateLimitError",
     "RenderError",
-    "RendererDisabledError",
     "TemplateKeyError",
     "ValidationError",
     # Domain Services

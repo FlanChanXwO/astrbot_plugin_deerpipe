@@ -103,18 +103,6 @@ class RenderError(DeerPipeError):
         super().__init__(message, error_code="RENDER_ERROR")
 
 
-class RendererDisabledError(RenderError):
-    """渲染器已禁用错误.
-
-    当渲染器因连续失败达到阈值被自动禁用时抛出.
-    与普通渲染失败区分开，避免被记录为新的失败计数.
-    """
-
-    def __init__(self, message: str) -> None:
-        super().__init__(message)
-        self.error_code = "RENDERER_DISABLED"
-
-
 class DataImportError(DeerPipeError):
     """数据导入错误.
 

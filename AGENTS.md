@@ -6,7 +6,7 @@ This repository is an AstrBot plugin. `main.py` is the plugin entry point and wi
 
 ## Build, Test, and Development Commands
 
-- `python -m pip install -r requirements.txt`: install runtime dependencies such as `aiosqlite`, `playwright`, and `jinja2`.
+- `python -m pip install -r requirements.txt`: install runtime dependencies such as `aiosqlite` and `jinja2`; image rendering uses AstrBot's built-in network t2i service and does not require local Playwright.
 - `python tests/run_tests.py --quick --no-install`: run the curated standalone test suite without installing missing tools.
 - `python -m pytest tests/test_plain_message_patterns.py -q`: run a focused regression test file.
 - `python -m ruff check .` and `python -m ruff format .`: lint and format Python code.
