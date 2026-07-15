@@ -69,6 +69,6 @@ __all__ = [
     "TEMPLATE_OPERATION_FAILED",
 ]
 
-from .paths import ResourcePaths
+from .paths import ResourcePaths as ResourcePaths
 
 __all__.append("ResourcePaths")
