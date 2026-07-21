@@ -1,6 +1,6 @@
 # CLAUDE.md — astrbot_plugin_deerpipe
 
-AstrBot plugin for daily check-ins, monthly calendars, group leaderboards, and yearly deer maps.
+AstrBot plugin for daily check-ins, monthly calendars, yearly deer maps, and a static help image.
 
 ## Project overview
 
@@ -30,8 +30,9 @@ src/
   infrastructure/        # DB, config, cache, rendering, utilities
   shared/                # Constants, paths, shared helpers
 templates/               # HTML/CSS templates for rendered images
-resources/images/        # Bundled image assets
-assets/                  # README screenshots and previews
+resources/images/        # Bundled runtime image assets (characters, pipes, etc.)
+assets/                  # README previews + runtime static help.png
+scripts/                 # Dev-only helpers (e.g. gen_help_image.py)
 tests/                   # pytest suites and mocks
 ```
 
@@ -40,6 +41,7 @@ tests/                   # pytest suites and mocks
 - Keep `main.py` thin; put business logic in `src/application` or `src/domain`.
 - Store shared trigger patterns and constants in `src/shared/constants.py`.
 - Plain-text command triggers must stay narrow and anchored. Add regression tests whenever matching rules change.
+- Help image is a fixed file at `assets/help.png` (no t2i). After command surface changes, regenerate with `python scripts/gen_help_image.py`.
 - Use `async def` for AstrBot handlers and public service methods that touch I/O.
 - Keep `metadata.yaml`, `CHANGELOG.md`, and release-visible behavior in sync.
 

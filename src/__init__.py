@@ -105,6 +105,7 @@ from .application import (
     DeerPipeService,
     DeermapCommandHandler,
     DeermapPresenter,
+    HelpCommandHandler,
     MessageTemplates,
 )
 
@@ -170,6 +171,7 @@ __all__ = [
     "DeerPipeService",
     "DeermapCommandHandler",
     "DeermapPresenter",
+    "HelpCommandHandler",
     "MessageTemplates",
     # Infrastructure - Config
     "AIBehaviorConfig",

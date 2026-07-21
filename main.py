@@ -32,6 +32,7 @@ from .src import (
     DeerPipeHTMLRenderer,
     DeerPipeLLMTools,
     DeerPipeService,
+    HelpCommandHandler,
     ResourceLoader,
     TemplateRenderer,
     close_aiohttp_session,
@@ -42,6 +43,7 @@ from .src import (
 from .src.shared.constants import (
     PLAIN_CALENDAR_TRIGGER_PATTERN,
     PLAIN_DEER_TRIGGER_PATTERN,
+    PLAIN_HELP_TRIGGER_PATTERN,
 )
 
 logger = get_logger()
@@ -253,6 +255,7 @@ class DeerPipePlugin(Star):
         self.data_handler = DataCommandHandler(self.data_manager)
         self.base_dir = Path(__file__).parent
         self.deermap_handler = DeermapCommandHandler(self.db, self.base_dir)
+        self.help_handler = HelpCommandHandler(self.base_dir)
 
         # 初始化 HTML 渲染器
         render_timeout = cfg.render_timeout
@@ -598,6 +601,12 @@ class DeerPipePlugin(Star):
     # Command Handlers (使用命令处理器)
     # ==================================================================
 
+    @filter.command("鹿帮助", alias={"🦌帮助", "鹿菜单", "deer_help", "deerhelp"})
+    async def help_cmd(self, event: AstrMessageEvent) -> AsyncGenerator[Any, None]:
+        """发送固定帮助图 (/鹿帮助)."""
+        async for result in self.help_handler.handle_help(event):
+            yield result
+
     @filter.command("deer", alias={"鹿", "🦌", "撸", "撸🦌"})
     async def deer_cmd(self, event: AstrMessageEvent) -> AsyncGenerator[Any, None]:
         """自我打卡或帮他人打卡 (/deer)."""
@@ -748,10 +757,17 @@ class DeerPipePlugin(Star):
     # ==================================================================
 
     def _is_explicit_slash_command(self, event: AstrMessageEvent) -> bool:
-        """检查消息是否以 / 开头."""
+        """检查消息是否显式带 / 命令前缀.
+
+        同时看 message_str（wake 可能已剥前缀）与原始 Plain 组件，
+        任一处出现 / 前缀即视为 slash 命令，避免 plain 与 command 双跑。
+        """
+        message_str = (event.get_message_str() or "").strip()
+        if message_str.startswith("/"):
+            return True
         for comp in event.get_messages():
-            if isinstance(comp, Plain):
-                return comp.text.strip().startswith("/")
+            if isinstance(comp, Plain) and comp.text.strip().startswith("/"):
+                return True
         return False
 
     def _parse_calendar_date(self, text: str) -> tuple[dt.date, str] | None:
@@ -841,3 +857,14 @@ class DeerPipePlugin(Star):
                     ):
                         yield result
                     return
+
+    @filter.regex(PLAIN_HELP_TRIGGER_PATTERN)
+    async def plain_help_cmd(
+        self, event: AstrMessageEvent
+    ) -> AsyncGenerator[Any, None]:
+        """纯文本帮助命令（不带/前缀）."""
+        if self._is_explicit_slash_command(event):
+            return
+
+        async for result in self.help_handler.handle_help(event):
+            yield result

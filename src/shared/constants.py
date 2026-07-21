@@ -12,14 +12,28 @@ from typing import Final, Literal
 # =============================================================================
 
 PLAIN_DEER_TRIGGER_PATTERN: Final[str] = (
-    r"^(?!/)(?:[🦌鹿撸]|撸🦌|帮\s*(?:[🦌鹿撸]|撸🦌))(?:\s+.*)?$"
+    r"^(?!/)"
+    r"(?:"
+    r"帮\s*(?:[🦌鹿撸]|撸🦌)(?:\s+.*|@.*)?|"
+    r"(?:撸🦌|[🦌鹿撸])(?!\s*(?:帮助|菜单))(?:\s+.*|@.*)?"
+    r")$"
 )
-"""纯文本打卡触发：仅完整短命令或“帮鹿/帮🦌 ...”格式，避免普通文本误触发."""
+"""纯文本打卡触发：短命令或“帮鹿/帮🦌 ...”；允许 🦌@用户 无空格；排除“鹿帮助/鹿菜单”."""
 
 PLAIN_CALENDAR_TRIGGER_PATTERN: Final[str] = (
     r"^(?!/)(上月)?(\d{4}年\d{1,2}月)?[🦌鹿撸](历|🦌历)$"
 )
 """纯文本鹿历查询触发."""
+
+PLAIN_HELP_TRIGGER_PATTERN: Final[str] = (
+    r"(?i)^(?!/)(?:鹿\s*帮助|🦌\s*帮助|鹿\s*菜单|deer[_\s]?help)$"
+)
+"""纯文本帮助触发：整句锚定，允许中文空格与英文大小写；与 slash 别名对齐."""
+
+# 同一事件内 slash + plain 双 handler 幂等键（AstrBot event.extra）
+EVENT_DEDUP_HELP: Final[str] = "deerpipe:handled:help"
+EVENT_DEDUP_DEER: Final[str] = "deerpipe:handled:deer"
+EVENT_DEDUP_CALENDAR: Final[str] = "deerpipe:handled:calendar"
 
 # =============================================================================
 # HTTP 和网络相关常量

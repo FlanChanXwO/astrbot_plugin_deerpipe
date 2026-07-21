@@ -206,3 +206,6 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 .DS_Store
+
+# Runtime data (plugin local DB/cache/host config; never commit secrets)
+data/

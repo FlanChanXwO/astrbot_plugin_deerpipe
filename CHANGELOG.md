@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.1.2] - 2026-07-21
+
+### Added
+- **固定帮助图命令**: 新增 `/鹿帮助`（别名 `🦌帮助` / `鹿菜单` / `deer_help` / `deerhelp`）
+  - 纯文本触发：`鹿帮助`、`🦌帮助`、`鹿菜单`、`deer_help`、`deerhelp`、`deer help`
+  - 运行时直接发送 `assets/help.png`，不依赖 t2i / Playwright
+  - 资源缺失时回退为文本提示
+  - 本地重生成脚本：`python scripts/gen_help_image.py`（仅开发机，非运行时依赖）
+
+### Fixed
+- **私聊/唤醒双发**: slash 命令与纯文本 regex 在私聊或 @Bot 时会同时激活；现在对帮助/打卡/鹿历共用 `event.extra` 幂等键，并在处理后 `stop_event`，避免重复发送
+- 纯文本英文帮助触发改为大小写不敏感；允许「鹿 帮助」类中文空格；「鹿 帮助」不再误走打卡
+- 纯文本打卡支持无空格 `🦌@用户` / `帮🦌@用户`（适配 message_str 把 @ 拼进文本的情况）
+
 ## [2.1.1] - 2026-07-15
 
 ### Fixed

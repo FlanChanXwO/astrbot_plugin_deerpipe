@@ -10,6 +10,7 @@ from .commands import (
     DataCommandHandler,
     DeerCommandHandler,
     DeermapCommandHandler,
+    HelpCommandHandler,
 )
 from .presenters import (
     CalendarPresenter,
@@ -30,6 +31,7 @@ __all__ = [
     "AdminCommandHandler",
     "DataCommandHandler",
     "DeermapCommandHandler",
+    "HelpCommandHandler",
     # Presenters
     "CalendarPresenter",
     "DeermapPresenter",

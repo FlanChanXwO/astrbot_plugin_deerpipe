@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 from astrbot.core.message.components import At
 
 from ...infrastructure import extract_mention_user_ids, get_logger
+from ...shared.constants import EVENT_DEDUP_CALENDAR
 
 if TYPE_CHECKING:
     from astrbot.api.event import AstrMessageEvent
@@ -141,6 +142,10 @@ class CalendarCommandHandler:
         Yields:
             发送给用户的响应
         """
+        if event.get_extra(EVENT_DEDUP_CALENDAR):
+            return
+        event.set_extra(EVENT_DEDUP_CALENDAR, True)
+
         messages = event.message_obj.message
         at_list = [m for m in messages if isinstance(m, At)]
         at_ids = extract_mention_user_ids(at_list)
@@ -163,6 +168,7 @@ class CalendarCommandHandler:
             except Exception:
                 logger.error(f"查询 {target_name} 日历渲染异常")
                 yield event.plain_result(f"{target_name} 的日历数据加载失败。")
+            event.stop_event()
             return
 
         try:
@@ -178,3 +184,4 @@ class CalendarCommandHandler:
         except Exception:
             logger.error("查询日历渲染异常")
             yield event.plain_result("日历数据加载失败。")
+        event.stop_event()

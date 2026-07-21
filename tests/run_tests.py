@@ -22,6 +22,7 @@ from pathlib import Path
 # 测试文件列表
 TEST_FILES = [
     "test_plain_message_patterns.py",
+    "test_help_handler.py",
     "test_html_renderer.py",
     "test_standalone.py",
     "test_extended.py",

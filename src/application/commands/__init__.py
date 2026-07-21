@@ -9,6 +9,7 @@ from .calendar_cmd import CalendarCommandHandler
 from .data_cmd import DataCommandHandler
 from .deer_cmd import DeerCommandHandler
 from .deermap_cmd import DeermapCommandHandler
+from .help_cmd import HelpCommandHandler
 
 __all__ = [
     "CommandHandler",
@@ -17,4 +18,5 @@ __all__ = [
     "AdminCommandHandler",
     "DataCommandHandler",
     "DeermapCommandHandler",
+    "HelpCommandHandler",
 ]
