@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 from src.infrastructure.utils import (
     extract_mention_user_ids,
     normalize_user_id,

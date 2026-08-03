@@ -4,6 +4,17 @@
 """
 
 from .cache import get_cached_avatar
+from .config import (
+    AIBehaviorConfig,
+    CalendarConfig,
+    DeerPipePluginConfig,
+    LimitsConfig,
+    RenderingConfig,
+    clear_config,
+    get_config,
+    init_config,
+    refresh_config,
+)
 from .persistence.database import DatabaseManager
 from .rendering import (
     DeerPipeHTMLRenderer,
@@ -20,17 +31,6 @@ from .utils.http_utils import (
     normalize_user_id,
     parse_allow_flag,
     validate_day,
-)
-from .config import (
-    AIBehaviorConfig,
-    CalendarConfig,
-    DeerPipePluginConfig,
-    LimitsConfig,
-    RenderingConfig,
-    clear_config,
-    get_config,
-    init_config,
-    refresh_config,
 )
 from .utils.logger import get_logger, logger
 

@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from shared.constants import (  # noqa: E402
+from shared.constants import (
     PLAIN_CALENDAR_TRIGGER_PATTERN,
     PLAIN_DEER_TRIGGER_PATTERN,
 )

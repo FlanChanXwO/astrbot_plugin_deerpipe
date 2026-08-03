@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Any
 
 import aiohttp
-
 from astrbot.core.message.components import At
 
 from ...domain import HTTP_TIMEOUT_SECONDS, PLATFORM_AIOCQHTTP, QQ_AVATAR_URL_TEMPLATE

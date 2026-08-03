@@ -74,7 +74,7 @@ class ToolResult:
     extra: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "ToolResult":
+    def from_dict(cls, data: dict[str, Any]) -> ToolResult:
         warnings_raw = data.get("delivery_warnings", [])
         warnings: list[DeliveryWarning] = []
         if isinstance(warnings_raw, list):
@@ -274,7 +274,7 @@ class DeerPipePlugin(Star):
             if isinstance(obj, dict):
                 return obj
             # 处理 AttrDict / Box 等类似 dict 的对象
-            if hasattr(obj, "items") and callable(getattr(obj, "items")):
+            if hasattr(obj, "items") and callable(obj.items):
                 try:
                     return dict(obj.items())
                 except (TypeError, ValueError):

@@ -11,10 +11,10 @@ from .deer_cmd import DeerCommandHandler
 from .deermap_cmd import DeermapCommandHandler
 
 __all__ = [
-    "CommandHandler",
-    "DeerCommandHandler",
-    "CalendarCommandHandler",
     "AdminCommandHandler",
+    "CalendarCommandHandler",
+    "CommandHandler",
     "DataCommandHandler",
+    "DeerCommandHandler",
     "DeermapCommandHandler",
 ]

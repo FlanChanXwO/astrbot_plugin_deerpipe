@@ -9,7 +9,6 @@ import calendar
 import hashlib
 from typing import Literal
 
-from ..entities import CalendarDay
 from ...shared.constants import (
     CHARACTER_RANGE_HIGH,
     CHARACTER_RANGE_LOW,
@@ -17,6 +16,7 @@ from ...shared.constants import (
     CHARACTER_THRESHOLD_HIGH,
     CHARACTER_THRESHOLD_MEDIUM,
 )
+from ..entities import CalendarDay
 
 
 class CalendarDataBuilder:

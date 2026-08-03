@@ -14,8 +14,8 @@ import time
 import uuid
 from pathlib import Path
 
-from ..utils.http_utils import _get_aiohttp_session
 from ...domain.exceptions import RenderError
+from ..utils.http_utils import _get_aiohttp_session
 
 
 class DeerPipeHTMLRenderer:
@@ -83,7 +83,6 @@ class DeerPipeHTMLRenderer:
 
     async def close(self):
         """清理资源（t2i 无需显式关闭）."""
-        pass
 
     async def __call__(
         self,

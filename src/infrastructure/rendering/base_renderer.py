@@ -87,7 +87,6 @@ class BaseTemplateRenderer(ABC):
         Returns:
             渲染数据字典
         """
-        pass
 
     async def render(
         self,
@@ -161,4 +160,3 @@ class BaseTemplateRenderer(ABC):
         Returns:
             格式化的纯文本
         """
-        pass

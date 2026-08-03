@@ -12,8 +12,8 @@ from typing import TYPE_CHECKING, Any
 
 from astrbot.core.message.components import At
 from astrbot.core.platform.message_type import MessageType
-from ...application.services.deer_service import DeerResult
 
+from ...application.services.deer_service import DeerResult
 from ...domain import TEMPLATE_GROUP_ONLY
 from ...infrastructure import extract_mention_user_ids, get_logger
 from ...shared import ResourcePaths

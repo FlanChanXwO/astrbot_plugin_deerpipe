@@ -14,9 +14,9 @@ from astrbot.api.event import AstrMessageEvent
 
 from ...application.presenters import DeermapPresenter
 from ...infrastructure import (
-    get_logger,
     ResourceLoader,
     TemplateRenderer,
+    get_logger,
 )
 from ...infrastructure.persistence import DatabaseManager
 

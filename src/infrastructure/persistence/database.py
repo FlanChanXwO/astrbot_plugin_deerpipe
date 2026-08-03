@@ -544,8 +544,7 @@ class DatabaseManager:
             for record in data["deer_records"]:
                 count = record["count"]
                 # 防止负数 count 降低既有记录
-                if count < 0:
-                    count = 0
+                count = max(count, 0)
                 await db.execute(
                     """
                     INSERT INTO deer_record (user_id, year, month, day, count)
